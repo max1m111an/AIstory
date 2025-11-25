@@ -11,6 +11,7 @@ services:
       - ".env"
     volumes:
       - "./apps:/app"
+      - "./database:/app/database"
     networks:
       local:
 
@@ -27,7 +28,7 @@ services:
     expose:
       - 3306
     volumes:
-      - "./database/:/docker-entrypoint-initdb.d:ro"
+      - "./database/dumps/:/docker-entrypoint-initdb.d:ro"
     healthcheck:
       test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
       start_period: 30s
