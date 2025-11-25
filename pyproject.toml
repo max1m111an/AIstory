@@ -11,6 +11,12 @@ packages = [{include = "apps"}]
 
 [tool.poetry.dependencies]
 python = "^3.12"
+sqlalchemy = "^2.0.44"
+greenlet = "^3.2.4"
+cryptography = "^46.0.3"
+dotenv = "^0.9.9"
+python-telegram-bot = "^22.5"
+aiomysql = "^0.3.2"
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
