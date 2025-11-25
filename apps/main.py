@@ -4,7 +4,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
 from database.database import database
-from database.models.user import User
+from database.models.user import UserModel
 
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -22,12 +22,12 @@ async def test_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     """Команда для тестирования БД"""
     try:
         async with database.session() as session:
-            existing_user = await session.get(User, 123456)
+            existing_user = await session.get(UserModel, 123456)
             if existing_user:
                 await update.message.reply_text('✅ Пользователь уже существует в БД!')
                 return
 
-            test_user = User(
+            test_user = UserModel(
                 username="test_user",
                 telegram_id=123456
             )
