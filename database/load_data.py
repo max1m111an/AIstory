@@ -20,13 +20,11 @@ async def parse_datafile(file, sheet_name: str) -> pd.DataFrame:
 async def load_data_to_db(file_: BytesIO, sheet_='Лист1'):
     result = await parse_datafile(file_, sheet_)
     count: int = 0
+    current_eras = {}
 
     async with database.session() as session:
-        temp_db_eras = await session.execute(
-            select(EraModel)
-        )
+        temp_db_eras = await session.execute(select(EraModel))
         db_eras = temp_db_eras.all()
-        current_eras = {}
         for index, row in result.iterrows():
             try:
                 era_name = row['Era']
@@ -37,7 +35,6 @@ async def load_data_to_db(file_: BytesIO, sheet_='Лист1'):
                     flush_era = await session.merge(new_era)
                     await session.flush()
                     current_eras[era_name] = flush_era.id
-                    print(f'Era: {flush_era.dict()}')
 
                 event_to_add = EventModel(
                     name=row['Questions'],
@@ -45,17 +42,14 @@ async def load_data_to_db(file_: BytesIO, sheet_='Лист1'):
                     difficulty=row['Difficulty'],
                     era_id=flush_era.id,
                 )
-                print(f'Event: {event_to_add.dict()}')
                 session.add(event_to_add)
                 await session.commit()
                 await session.refresh(event_to_add)
-
                 count += 1
-                print(event_to_add.dict())
 
             except Exception as e:
-                await session.rollback()
                 print(f"load_data_to_db err: {str(e)}")
+                await session.rollback()
                 continue
 
     return count
