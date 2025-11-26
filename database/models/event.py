@@ -15,6 +15,7 @@ class EventModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50))
     date: Mapped[str] = mapped_column(String(25))
+    difficulty: Mapped[int] = mapped_column(default=0)
     era_id: Mapped[int | None] = mapped_column(ForeignKey("eras.id"), nullable=True)
 
     era: Mapped["EraModel | None"] = relationship(
