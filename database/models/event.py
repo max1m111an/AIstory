@@ -15,9 +15,9 @@ class EventModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50))
     date: Mapped[str] = mapped_column(String(25))
-    era_id: Mapped[int] = mapped_column(ForeignKey("eras.id"))
+    era_id: Mapped[int | None] = mapped_column(ForeignKey("eras.id"), nullable=True)
 
-    era: Mapped["EraModel"] = relationship(
+    era: Mapped["EraModel | None"] = relationship(
         "EraModel", back_populates="events",
     )
 
@@ -32,12 +32,12 @@ class EraModel(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(50))
-    period_id: Mapped[int] = mapped_column(ForeignKey("periods.id"))
+    period_id: Mapped[int | None] = mapped_column(ForeignKey("periods.id"), nullable=True)
 
     events: Mapped[list[EventModel]] = relationship(
         EventModel, back_populates="era",
     )
-    period: Mapped["PeriodModel"] = relationship(
+    period: Mapped["PeriodModel | None"] = relationship(
         "PeriodModel", back_populates="eras",
     )
 
