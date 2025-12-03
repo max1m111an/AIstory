@@ -1,0 +1,1 @@
+MAIN_MENU, TRAINING, START_TEST = range(3)

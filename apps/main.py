@@ -1,10 +1,9 @@
 import os
 import asyncio
 
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
 
-from handles import *
-from models import TestManager
+from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel
 from database import database
 
 
@@ -12,7 +11,6 @@ MAIN_MENU, TRAINING, START_TEST = range(3)
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
-test_manager = TestManager()
 
 def main():
     """Основная функция запуска бота"""

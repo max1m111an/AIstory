@@ -3,10 +3,9 @@ from typing import List, Dict
 
 from sqlalchemy import select
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters, ConversationHandler
+from telegram.ext import ContextTypes
 
-import database
-from database import load_data_to_db
+from database import load_data_to_db, database
 from database.models import EventModel
 
 

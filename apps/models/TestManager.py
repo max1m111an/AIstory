@@ -1,7 +1,6 @@
 import random
 from typing import Dict, List
 
-from handles.db_handles import get_events_name_date
 
 
 class TestManager:
@@ -12,6 +11,7 @@ class TestManager:
         self.total_questions: int = 0
 
     async def start_new_test(self, questions_count: int = 5):
+        from handles import get_events_name_date
         """Начинает новый тест с указанным количеством вопросов"""
         all_questions = await get_events_name_date()
         random.shuffle(all_questions)

@@ -2,10 +2,12 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 
 from assets.Text import getMainMenu, getTrainingMenu, getEventDataMenu, getMainMenu_1
-from handles.db_handles import get_events_name_date
-from main import MAIN_MENU, TRAINING, START_TEST, test_manager
-from utils.generate_answers import generate_answers
+from constants import MAIN_MENU, TRAINING, START_TEST
+from .db_handles import get_events_name_date
+from models import TestManager
+from utils import generate_answers
 
+test_manager = TestManager()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Начало работы с ботом"""
