@@ -1,12 +1,12 @@
 from io import BytesIO
 from typing import List, Dict
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from database import load_data_to_db, database
-from database.models import EventModel
+from database.models import EventModel, EraModel
 
 
 async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -34,6 +34,37 @@ async def get_events_name_date() -> List[Dict]:
         result = await session.execute(
             select(EventModel.name, EventModel.date)
         )
+        events = result.all()
+        return [{'name': name, 'date': date} for name, date in events]
+
+async def get_eras_name() -> List[Dict]:
+    """Получает все эпохи из базы данных"""
+    async with database.session() as session:
+        result = await session.execute(
+            select(EraModel.id, EraModel.name)  # Добавляем id
+        )
+        events = result.all()
+        return [{'id': id, 'name': name} for id, name in events]
+
+
+async def get_events_with_filters(difficulty: int = None, era_id: int = None) -> List[Dict]:
+    """Получает ВСЕ события с учетом фильтров сложности и эпохи"""
+    async with database.session() as session:
+        query = select(EventModel.name, EventModel.date)
+
+        conditions = []
+        if difficulty is not None and difficulty != -1:
+            conditions.append(EventModel.difficulty == difficulty)
+        if era_id is not None and era_id != -1:
+            conditions.append(EventModel.era_id == era_id)
+
+        if conditions:
+            if len(conditions) > 1:
+                query = query.where(or_(*conditions))
+            else:
+                query = query.where(conditions[0])
+
+        result = await session.execute(query)
         events = result.all()
         return [{'name': name, 'date': date} for name, date in events]
 

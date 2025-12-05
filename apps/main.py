@@ -3,7 +3,9 @@ import asyncio
 
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
 
-from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel
+from constants import SETTING_TEST
+from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel, \
+    event_data_menu, settings_menu
 from database import database
 
 
@@ -27,13 +29,20 @@ def main():
             ],
             TRAINING: [
                 CallbackQueryHandler(training_menu,
-                                     pattern='^(chronology|date_event|event_date|back_main|back_training|start_chronology)$')
+                                     pattern='^(chronology|date_event|event_date|back_main|back_training)$')
+            ],
+            SETTING_TEST: [
+                CallbackQueryHandler(event_data_menu,
+                                     pattern='^(difficulty|era|event_date|back_training|start_test)$'),
+                CallbackQueryHandler(settings_menu,
+                                     pattern='^(diff_-1|diff_1|diff_2|diff_3|era_-1|era_[0-9]+|event_date)$')
             ],
             START_TEST: [
-                CallbackQueryHandler(start_test_menu, pattern='^(start_test|cancel_test)$'),
+                CallbackQueryHandler(start_test_menu, pattern='^(cancel_test)$'),
                 CallbackQueryHandler(handle_answer, pattern='^answer_[1-4]$'),
                 CallbackQueryHandler(next_question, pattern='^next_question$'),
-                CallbackQueryHandler(main_menu, pattern='^back_main$')
+                CallbackQueryHandler(main_menu, pattern='^back_main$'),
+                CallbackQueryHandler(event_data_menu, pattern='^(difficulty|era)$')
             ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]

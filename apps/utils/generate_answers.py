@@ -1,17 +1,183 @@
 import random
 from typing import Dict, List
+import re
+
+def extract_year_or_interval(date_str: str) -> tuple:
+    date_str = date_str.strip()
+
+    if '.' in date_str and not date_str.startswith('00'):
+        parts = date_str.split('.')
+        if len(parts) == 2:
+            return ('interval', parts[0].strip(), parts[1].strip())
+
+    elif '-' in date_str and not date_str.startswith('00'):
+        parts = date_str.split('-')
+        if len(parts) == 2:
+            return ('interval', parts[0].strip(), parts[1].strip())
+
+    date_pattern = r'^\d{4}-\d{2}-\d{2}'
+    if re.match(date_pattern, date_str):
+        year = date_str.split('-')[0]
+        return ('year', year)
+
+    return ('year', date_str)
 
 
-async def generate_answers(correct_question: Dict, all_questions: List[Dict]) -> List[str]:
-    """Генерирует 4 варианта ответа (1 правильный + 3 случайных)"""
-    correct_answer = correct_question['date']
+def normalize_date_format(date_str: str) -> str:
+    date_type, *parts = extract_year_or_interval(date_str)
 
-    wrong_answers = list(set([q['date'] for q in all_questions if q['date'] != correct_answer]))
+    if date_type == 'year':
+        return str(parts[0])
+    else:
+        start, end = parts
+        if '.' in date_str:
+            return f"{start}.{end}"
+        else:
+            return f"{start}-{end}"
 
-    selected_wrong = random.sample(wrong_answers, min(3, len(wrong_answers)))
 
-    all_answers = [correct_answer] + selected_wrong
+async def generate_smart_answers(correct_question: Dict, all_questions: List[Dict]) -> List[str]:
+    correct_date = correct_question['date']
+
+    correct_type, *correct_parts = extract_year_or_interval(correct_date)
+
+    same_type_dates = []
+    for q in all_questions:
+        q_type, *_ = extract_year_or_interval(q['date'])
+        if q_type == correct_type:
+            same_type_dates.append(q['date'])
+
+    same_type_dates = list(set(same_type_dates))
+    same_type_dates = [d for d in same_type_dates if d != correct_date]
+
+    if correct_type == 'year':
+        correct_year = correct_parts[0]
+
+        year_dates = []
+        for date_str in same_type_dates:
+            q_type, *parts = extract_year_or_interval(date_str)
+            if q_type == 'year':
+                try:
+                    year_dates.append(int(parts[0]))
+                except ValueError:
+                    continue
+
+        year_dates.sort()
+
+        try:
+            correct_year_num = int(correct_year)
+        except ValueError:
+            correct_year_num = 0
+
+        wrong_answers = []
+
+        if year_dates:
+            diffs = [abs(year - correct_year_num) for year in year_dates]
+            sorted_years = [year for _, year in sorted(zip(diffs, year_dates))]
+
+            for year in sorted_years:
+                if str(year) != correct_year and str(year) not in wrong_answers:
+                    wrong_answers.append(str(year))
+                    if len(wrong_answers) >= 2:
+                        break
+
+        while len(wrong_answers) < 2:
+            if year_dates:
+                random_year = random.choice(year_dates)
+            else:
+                random_year = correct_year_num + random.randint(1, 100)
+
+            if str(random_year) != correct_year and str(random_year) not in wrong_answers:
+                wrong_answers.append(str(random_year))
+
+    else:
+        start_year, end_year = correct_parts
+        try:
+            start_num = int(start_year) if start_year.isdigit() else 0
+        except AttributeError:
+            start_num = 0
+
+        try:
+            end_num = int(end_year) if end_year.isdigit() else 0
+        except AttributeError:
+            end_num = 0
+
+        intervals = []
+        for date_str in same_type_dates:
+            q_type, *parts = extract_year_or_interval(date_str)
+            if q_type == 'interval':
+                intervals.append(date_str)
+
+        wrong_answers = []
+
+        if len(intervals) >= 2:
+            selected_intervals = random.sample(intervals, 2)
+            wrong_answers.extend(selected_intervals)
+        elif intervals:
+            wrong_answers.extend(intervals)
+
+        while len(wrong_answers) < 2:
+            offset = random.randint(10, 50)
+            new_start = start_num + offset
+            new_end = end_num + offset
+
+            separator = '.' if '.' in correct_date else '-'
+            new_interval = f"{new_start}{separator}{new_end}"
+
+            if new_interval != correct_date and new_interval not in wrong_answers:
+                wrong_answers.append(new_interval)
+
+    if same_type_dates:
+        random_wrong = random.choice(same_type_dates)
+        while random_wrong == correct_date or random_wrong in wrong_answers:
+            random_wrong = random.choice(same_type_dates)
+        wrong_answers.append(random_wrong)
+    else:
+        if correct_type == 'year':
+            offset = random.randint(10, 100)
+            random_wrong = str(int(correct_parts[0]) + offset) if correct_parts[0].isdigit() else str(offset)
+        else:
+            offset = random.randint(10, 50)
+            separator = '.' if '.' in correct_date else '-'
+            start_val = int(correct_parts[0]) if correct_parts[0].isdigit() else 0
+            end_val = int(correct_parts[1]) if correct_parts[1].isdigit() else 0
+            random_wrong = f"{start_val + offset}{separator}{end_val + offset}"
+        wrong_answers.append(random_wrong)
+
+    wrong_answers = wrong_answers[:3]
+
+    all_answers = [normalize_date_format(correct_date)] + [normalize_date_format(d) for d in wrong_answers]
+
     random.shuffle(all_answers)
 
     return all_answers
 
+
+async def generate_smart_answers_date_event(correct_question: Dict, all_questions: List[Dict]) -> List[str]:
+    correct_answer = correct_question['name']
+
+    same_type_events = []
+    for q in all_questions:
+        if q['name'] != correct_answer:
+            same_type_events.append(q['name'])
+
+    same_type_events = list(set(same_type_events))
+
+    wrong_answers = []
+
+    if len(same_type_events) >= 3:
+        wrong_answers = random.sample(same_type_events, 3)
+    else:
+        wrong_answers = same_type_events[:]
+
+        while len(wrong_answers) < 3:
+            fake_event = f"Событие {random.randint(1000, 9999)}"
+            if fake_event not in wrong_answers and fake_event != correct_answer:
+                wrong_answers.append(fake_event)
+
+    wrong_answers = wrong_answers[:3]
+
+    all_answers = [correct_answer] + wrong_answers
+    random.shuffle(all_answers)
+
+    return all_answers
