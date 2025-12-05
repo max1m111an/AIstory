@@ -15,6 +15,19 @@ difficulty_id_to_name = {
     3: "Сложная",
 }
 
+
+async def get_era_name_by_id(era_id):
+    if era_id == -1:
+        return "Любая"
+    elif era_id:
+        eras = await get_eras_name()
+        for era in eras:
+            if era['id'] == era_id:
+                return era['name']
+    else:
+        return "Не выбрана"
+
+
 def get_callback_type_training(cont):
     if cont == 'name':
         return 'event_date'
@@ -29,18 +42,8 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     era_id = context.user_data.get("era_id")
     difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
-    era_name = ""
-    if era_id == -1:
-        era_name = "Любая"
-    elif era_id:
-        eras = await get_eras_name()
-        for era in eras:
-            if era['id'] == era_id:
-                era_name = era['name']
-                break
-    else:
-        era_name = "Не выбрана"
-
+    era_name = await get_era_name_by_id(era_id)
+    
     if query.data == 'event_date' or query.data == 'date_event':
         context.user_data["test_type"] = ('name', 'date') if query.data == 'event_date' else ('date', 'name')
 
@@ -143,17 +146,7 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         era_id = context.user_data.get("era_id")
         difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
-        era_name = ""
-        if era_id == -1:
-            era_name = "Любая"
-        elif era_id:
-            eras = await get_eras_name()
-            for era in eras:
-                if era['id'] == era_id:
-                    era_name = era['name']
-                    break
-        else:
-            era_name = "Не выбрана"
+        era_name = await get_era_name_by_id(era_id)
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
@@ -204,17 +197,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         era_id = context.user_data.get("era_id")
         difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
-        era_name = ""
-        if era_id == -1:
-            era_name = "Любая"
-        elif era_id:
-            eras = await get_eras_name()
-            for era in eras:
-                if era['id'] == era_id:
-                    era_name = era['name']
-                    break
-        else:
-            era_name = "Не выбрана"
+        era_name = await get_era_name_by_id(era_id)
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
@@ -302,17 +285,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     era_id = context.user_data.get("era_id")
     difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
-    era_name = ""
-    if era_id == -1:
-        era_name = "Любая"
-    elif era_id:
-        eras = await get_eras_name()
-        for era in eras:
-            if era['id'] == era_id:
-                era_name = era['name']
-                break
-    else:
-        era_name = "Не выбрана"
+    era_name = await get_era_name_by_id(era_id)
 
     has_difficulty = difficulty_id is not None
     has_era = era_id is not None
@@ -517,15 +490,7 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     era_id = context.user_data.get('test_era')
     difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
-    era_name = ""
-    if era_id == -1:
-        era_name = "Любая"
-    elif era_id:
-        eras = await get_eras_name()
-        for era in eras:
-            if era['id'] == era_id:
-                era_name = era['name']
-                break
+    era_name = await get_era_name_by_id(era_id)
     
     keyboard = [
         [InlineKeyboardButton("🔄 Начать заново", callback_data=get_callback_type_training(context.user_data.get("test_type")[0]))],
