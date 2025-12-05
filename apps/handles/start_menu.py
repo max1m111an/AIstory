@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from assets import getMainMenu, getTrainingMenu, choose_train_menu, main_menu_keybord
-from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
+from constants import MAIN_MENU, TRAINING
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     reply_markup = InlineKeyboardMarkup(main_menu_keybord)

@@ -3,13 +3,11 @@ import asyncio
 
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
 
-from constants import SETTING_TEST
+from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
 from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel, \
     era_diff_menu, settings_menu
 from database import database
 
-
-MAIN_MENU, TRAINING, START_TEST = range(3)
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
@@ -33,9 +31,9 @@ def main():
             ],
             SETTING_TEST: [
                 CallbackQueryHandler(era_diff_menu,
-                                     pattern='^(difficulty|era|event_date|back_training|start_test)$'),
+                                     pattern='^(difficulty|era|date_event|event_date|back_training|start_test)$'),
                 CallbackQueryHandler(settings_menu,
-                                     pattern='^(diff_-1|diff_1|diff_2|diff_3|era_-1|era_[0-9]+|event_date)$')
+                                     pattern='^(diff_-1|diff_1|diff_2|diff_3|era_-1|era_[0-9]+|event_date|date_event)$')
             ],
             START_TEST: [
                 CallbackQueryHandler(start_test_menu, pattern='^(cancel_test)$'),

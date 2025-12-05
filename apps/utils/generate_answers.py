@@ -36,16 +36,16 @@ def normalize_date_format(date_str: str) -> str:
             return f"{start}-{end}"
 
 
-async def generate_smart_answers(correct_question: Dict, all_questions: List[Dict]) -> List[str]:
-    correct_date = correct_question['date']
+async def generate_smart_answers(correct_question: Dict, all_questions: List[Dict], test_type) -> List[str]:
+    correct_date = correct_question[test_type[1]]
 
     correct_type, *correct_parts = extract_year_or_interval(correct_date)
 
     same_type_dates = []
     for q in all_questions:
-        q_type, *_ = extract_year_or_interval(q['date'])
+        q_type, *_ = extract_year_or_interval(q[test_type[1]])
         if q_type == correct_type:
-            same_type_dates.append(q['date'])
+            same_type_dates.append(q[test_type[1]])
 
     same_type_dates = list(set(same_type_dates))
     same_type_dates = [d for d in same_type_dates if d != correct_date]
@@ -153,13 +153,13 @@ async def generate_smart_answers(correct_question: Dict, all_questions: List[Dic
     return all_answers
 
 
-async def generate_smart_answers_date_event(correct_question: Dict, all_questions: List[Dict]) -> List[str]:
-    correct_answer = correct_question['name']
+async def generate_smart_answers_event_date(correct_question: Dict, all_questions: List[Dict], test_type) -> List[str]:
+    correct_answer = correct_question[test_type[0]]
 
     same_type_events = []
     for q in all_questions:
-        if q['name'] != correct_answer:
-            same_type_events.append(q['name'])
+        if q[test_type[0]] != correct_answer:
+            same_type_events.append(q[test_type[0]])
 
     same_type_events = list(set(same_type_events))
 
@@ -171,7 +171,8 @@ async def generate_smart_answers_date_event(correct_question: Dict, all_question
         wrong_answers = same_type_events[:]
 
         while len(wrong_answers) < 3:
-            fake_event = f"Событие {random.randint(1000, 9999)}"
+            event_or_data = 'Событие' if test_type[0] == 'name' else 'Дата'
+            fake_event = f"{event_or_data} {random.randint(1000, 9999)}"
             if fake_event not in wrong_answers and fake_event != correct_answer:
                 wrong_answers.append(fake_event)
 
@@ -181,3 +182,6 @@ async def generate_smart_answers_date_event(correct_question: Dict, all_question
     random.shuffle(all_answers)
 
     return all_answers
+
+async def generate_smart_answers_date_event(correct_question: Dict, all_questions: List[Dict], test_type) -> List[str]:
+    ...

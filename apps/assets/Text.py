@@ -24,20 +24,17 @@ def getTrainingMenu():
     """)
 
 
-def getEventDateMenu(diff="Любая", era="Любая"):
+def getStartTestMenu(diff="Любая", era="Любая"):
     return (f"""
 Выбрана сложность: {diff}
 Выбрана эпоха: {era}
 Начнём?                                                                                                                                                                                                                                                                                                                              
     """)
 
-def getStartTestMenu(event):
-    return (
-        f"""
-Вопрос N:
-Назовите дату события: 
-{event}
-        """
+def getEventDateMenu(answered_quests, total_quests, cur_quest):
+    return (f"📝 Вопрос {len(answered_quests) + 1}/{total_quests}\n\n"
+            f"Событие: {cur_quest['name']}\n\n"
+            f"Выберите правильную дату:"
     )
 
 def getDifficultyMenu():
