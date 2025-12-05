@@ -2,55 +2,10 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import random
 
-
-from assets import getMainMenu, getTrainingMenu, getEventDataMenu, getDifficultyMenu
+from assets import getMainMenu, getTrainingMenu, getEventDateMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers, normalize_date_format
 from .db_handles import get_eras_name, get_events_with_filters
-
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    keyboard = [
-        [InlineKeyboardButton("🎯 Тренировка", callback_data='training')],
-        [InlineKeyboardButton("⚡ Интенсив", callback_data='intensive')],
-        [InlineKeyboardButton("🏃 Марафон", callback_data='marathon')],
-        [InlineKeyboardButton("🔥 Держи стрик", callback_data='streak')],
-        [InlineKeyboardButton("📊 Моя статистика", callback_data='stats')],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    await update.message.reply_text(getMainMenu(), reply_markup=reply_markup)
-    return MAIN_MENU
-
-
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    query = update.callback_query
-    await query.answer()
-
-    if query.data == 'training':
-        main_keyboard = [
-            [InlineKeyboardButton("Хронология", callback_data='chronology')],
-            [InlineKeyboardButton("Дата - Событие", callback_data='date_event')],
-            [InlineKeyboardButton("Событие - Дата", callback_data='event_date')],
-            [InlineKeyboardButton("⬅️ Назад", callback_data='back_main')],
-        ]
-        reply_markup = InlineKeyboardMarkup(main_keyboard)
-        await query.edit_message_text(getTrainingMenu(), reply_markup=reply_markup)
-        return TRAINING
-
-    elif query.data == 'back_main':
-        keyboard = [
-            [InlineKeyboardButton("🎯 Тренировка", callback_data='training')],
-            [InlineKeyboardButton("⚡ Интенсив", callback_data='intensive')],
-            [InlineKeyboardButton("🏃 Марафон", callback_data='marathon')],
-            [InlineKeyboardButton("🔥 Держи стрик", callback_data='streak')],
-            [InlineKeyboardButton("📊 Моя статистика", callback_data='stats')],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        await query.edit_message_text(getMainMenu(), reply_markup=reply_markup)
-        return MAIN_MENU
-
-    return MAIN_MENU
 
 
 async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -88,52 +43,33 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
 
-        date_event_keyboard = [
-            [InlineKeyboardButton("🏺 Эпоха", callback_data='era')],
-            [InlineKeyboardButton("🎚 Сложность", callback_data='difficulty')],
-        ]
+        date_event_keyboard = era_diff_keyboard.copy()
 
         if has_difficulty and has_era:
             date_event_keyboard.append(
                 [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
             )
 
-        date_event_keyboard.extend([
-            [InlineKeyboardButton("🔕 Уведомления", callback_data='notifications')],
-            [InlineKeyboardButton("⬅️ Назад", callback_data='back_training')],
-        ])
+        date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
-        await query.edit_message_text(getEventDataMenu(difficulty_name, era_name), reply_markup=reply_markup)
+        await query.edit_message_text(getEventDateMenu(difficulty_name, era_name), reply_markup=reply_markup)
         return SETTING_TEST
 
     elif query.data == 'back_training':
-        main_keyboard = [
-            [InlineKeyboardButton("Хронология", callback_data='chronology')],
-            [InlineKeyboardButton("Дата - Событие", callback_data='date_event')],
-            [InlineKeyboardButton("Событие - Дата", callback_data='event_date')],
-            [InlineKeyboardButton("⬅️ Назад", callback_data='back_main')],
-        ]
-        reply_markup = InlineKeyboardMarkup(main_keyboard)
+        reply_markup = InlineKeyboardMarkup(choose_train_menu)
         await query.edit_message_text(getTrainingMenu(), reply_markup=reply_markup)
         return TRAINING
 
     elif query.data == 'back_main':
-        keyboard = [
-            [InlineKeyboardButton("🎯 Тренировка", callback_data='training')],
-            [InlineKeyboardButton("⚡ Интенсив", callback_data='intensive')],
-            [InlineKeyboardButton("🏃 Марафон", callback_data='marathon')],
-            [InlineKeyboardButton("🔥 Держи стрик", callback_data='streak')],
-            [InlineKeyboardButton("📊 Моя статистика", callback_data='stats')],
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
+        reply_markup = InlineKeyboardMarkup(main_menu_keybord)
         await query.edit_message_text(getMainMenu(), reply_markup=reply_markup)
         return MAIN_MENU
 
     return TRAINING
 
 
-async def event_data_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
@@ -233,33 +169,21 @@ async def event_data_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
 
-        date_event_keyboard = [
-            [InlineKeyboardButton("🏺 Эпоха", callback_data='era')],
-            [InlineKeyboardButton("🎚 Сложность", callback_data='difficulty')],
-        ]
+        date_event_keyboard = era_diff_keyboard.copy()
 
         if has_difficulty and has_era:
             date_event_keyboard.append(
                 [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
             )
 
-        date_event_keyboard.extend([
-            [InlineKeyboardButton("🔕 Уведомления", callback_data='notifications')],
-            [InlineKeyboardButton("⬅️ Назад", callback_data='back_training')],
-        ])
+        date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
-        await query.edit_message_text(getEventDataMenu(difficulty_name, era_name), reply_markup=reply_markup)
+        await query.edit_message_text(getEventDateMenu(difficulty_name, era_name), reply_markup=reply_markup)
         return SETTING_TEST
 
     elif query.data == "back_training":
-        main_keyboard = [
-            [InlineKeyboardButton("Хронология", callback_data='chronology')],
-            [InlineKeyboardButton("Дата - Событие", callback_data='date_event')],
-            [InlineKeyboardButton("Событие - Дата", callback_data='event_date')],
-            [InlineKeyboardButton("⬅️ Назад", callback_data='back_main')],
-        ]
-        reply_markup = InlineKeyboardMarkup(main_keyboard)
+        reply_markup = InlineKeyboardMarkup(choose_train_menu)
         await query.edit_message_text(getTrainingMenu(), reply_markup=reply_markup)
         return TRAINING
 
@@ -313,23 +237,17 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
 
-        date_event_keyboard = [
-            [InlineKeyboardButton("🏺 Эпоха", callback_data='era')],
-            [InlineKeyboardButton("🎚 Сложность", callback_data='difficulty')],
-        ]
+        date_event_keyboard = era_diff_keyboard.copy()
 
         if has_difficulty and has_era:
             date_event_keyboard.append(
                 [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
             )
 
-        date_event_keyboard.extend([
-            [InlineKeyboardButton("🔕 Уведомления", callback_data='notifications')],
-            [InlineKeyboardButton("⬅️ Назад", callback_data='back_training')],
-        ])
+        date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
-        await query.edit_message_text(getEventDataMenu(difficulty_name, era_name), reply_markup=reply_markup)
+        await query.edit_message_text(getEventDateMenu(difficulty_name, era_name), reply_markup=reply_markup)
         return SETTING_TEST
 
     parts = data.split("_")
@@ -434,23 +352,17 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     has_difficulty = difficulty_id is not None
     has_era = era_id is not None
 
-    date_event_keyboard = [
-        [InlineKeyboardButton("🏺 Эпоха", callback_data='era')],
-        [InlineKeyboardButton("🎚 Сложность", callback_data='difficulty')],
-    ]
+    date_event_keyboard = era_diff_keyboard.copy()
 
     if has_difficulty and has_era:
         date_event_keyboard.append(
             [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
         )
 
-    date_event_keyboard.extend([
-        [InlineKeyboardButton("🔕 Уведомления", callback_data='notifications')],
-        [InlineKeyboardButton("⬅️ Назад", callback_data='back_training')],
-    ])
+    date_event_keyboard.extend(notification_and_back_keyboard)
 
     reply_markup = InlineKeyboardMarkup(date_event_keyboard)
-    await query.edit_message_text(getEventDataMenu(difficulty_name, era_name), reply_markup=reply_markup)
+    await query.edit_message_text(getEventDateMenu(difficulty_name, era_name), reply_markup=reply_markup)
     return SETTING_TEST
 
 

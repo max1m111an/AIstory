@@ -24,12 +24,13 @@ def getTrainingMenu():
     """)
 
 
-def getEventDataMenu(diff="Любая", era="Любая"):
+def getEventDateMenu(diff="Любая", era="Любая"):
     return (f"""
 Выбрана сложность: {diff}
 Выбрана эпоха: {era}
 Начнём?                                                                                                                                                                                                                                                                                                                              
     """)
+
 def getStartTestMenu(event):
     return (
         f"""

@@ -1,7 +1,7 @@
 from io import BytesIO
 from typing import List, Dict
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, and_
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -28,12 +28,12 @@ async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text(f'load_datafile err: {str(e)}')
 
 
+select_events_stmt = select(EventModel.name, EventModel.date)
+
 async def get_events_name_date() -> List[Dict]:
     """Получает все события из базы данных"""
     async with database.session() as session:
-        result = await session.execute(
-            select(EventModel.name, EventModel.date)
-        )
+        result = await session.execute(select_events_stmt)
         events = result.all()
         return [{'name': name, 'date': date} for name, date in events]
 
@@ -41,16 +41,16 @@ async def get_eras_name() -> List[Dict]:
     """Получает все эпохи из базы данных"""
     async with database.session() as session:
         result = await session.execute(
-            select(EraModel.id, EraModel.name)  # Добавляем id
+            select(EraModel.id, EraModel.name).order_by(EraModel.id)
         )
-        events = result.all()
-        return [{'id': id, 'name': name} for id, name in events]
+        eras = result.all()
+        return [{'id': id, 'name': name} for id, name in eras]
 
 
 async def get_events_with_filters(difficulty: int = None, era_id: int = None) -> List[Dict]:
     """Получает ВСЕ события с учетом фильтров сложности и эпохи"""
     async with database.session() as session:
-        query = select(EventModel.name, EventModel.date)
+        query = select_events_stmt
 
         conditions = []
         if difficulty is not None and difficulty != -1:
@@ -60,11 +60,10 @@ async def get_events_with_filters(difficulty: int = None, era_id: int = None) ->
 
         if conditions:
             if len(conditions) > 1:
-                query = query.where(or_(*conditions))
+                query = query.where(and_(*conditions))
             else:
                 query = query.where(conditions[0])
 
         result = await session.execute(query)
         events = result.all()
         return [{'name': name, 'date': date} for name, date in events]
-
