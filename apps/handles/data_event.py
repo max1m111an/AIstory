@@ -4,7 +4,7 @@ import random
 
 from assets import getMainMenu, getTrainingMenu, getStartTestMenu, getEventDateMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
-from utils import generate_smart_answers, normalize_date_format
+from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
 from .db_handles import get_eras_name, get_events_with_filters
 
 
@@ -44,7 +44,7 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     era_name = await get_era_name_by_id(era_id)
     
-    if query.data == 'event_date' or query.data == 'date_event':
+    if query.data in ('event_date', 'date_event'):
         context.user_data["test_type"] = ('name', 'date') if query.data == 'event_date' else ('date', 'name')
 
         has_difficulty = difficulty_id is not None
@@ -364,7 +364,7 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
         context.user_data.get('test_era') if context.user_data.get('test_era') != -1 else None
     )
 
-    answers = await generate_smart_answers(current_question, all_questions, context.user_data.get("test_type"))
+    answers = await generate_smart_answers_event_date(current_question, all_questions) if context.user_data.get('test_type')[0] == 'name' else await generate_smart_answers_date_event(current_question, all_questions)
 
     context.user_data['current_answers'] = answers
     context.user_data['current_question'] = current_question
