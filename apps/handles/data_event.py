@@ -380,7 +380,8 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
         name_1, name_2 = 'Событие', 'правильную дату'
     else:
         name_1, name_2 = 'Дата', 'правильное событие'
-    text = (f"📝 Вопрос {len(answered_questions) + 1}/{total_questions}\n\n"
+    text = (f"📝 Вопрос {len(answered_questions) + 1}/{total_questions}\n"
+            f"🎚 Сложность: {context.user_data.get('test_difficulty')}\n\n"
             f"{name_1}: {current_question[context.user_data.get("test_type")[0]]}\n\n"
             f"Выберите {name_2}:")
 
