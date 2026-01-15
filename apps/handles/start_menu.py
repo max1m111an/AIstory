@@ -10,28 +10,23 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return MAIN_MENU
 
 
+get_message_train_type = {
+    "training": "тренировки 🎯",
+    "marathon": "марафона 🏃",
+    "intensive": "интенсива ⚡️"
+}
+
+
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
 
-    if query.data == 'training':
+    if query.data == 'training' or query.data == 'marathon' or query.data == 'intensive':
         reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingOptionalMenu("тренировки 🎯"), reply_markup=reply_markup)
-        context.user_data['train_type'] = 'training'
+        await query.edit_message_text(getTrainingOptionalMenu(get_message_train_type.get(query.data)), reply_markup=reply_markup)
+        context.user_data['train_type'] = query.data
         return TRAINING
     
-    elif query.data == 'marathon':
-        reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingOptionalMenu("марафона 🏃"), reply_markup=reply_markup)
-        context.user_data['train_type'] = 'marathon'
-        return TRAINING
-    
-    elif query.data == 'intensive':
-        reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingOptionalMenu("интенсива ⚡️"), reply_markup=reply_markup)
-        context.user_data['train_type'] = 'intensive'
-        return TRAINING
-
     elif query.data == 'back_main':
         reply_markup = InlineKeyboardMarkup(main_menu_keybord)
         await query.edit_message_text(getMainMenu(), reply_markup=reply_markup)

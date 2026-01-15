@@ -5,7 +5,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Conv
 
 from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
 from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel, \
-    era_diff_menu, settings_menu
+    era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions, back_to_training_from_test
 from database import database
 
 
@@ -36,11 +36,14 @@ def main():
                                      pattern='^(diff_-1|diff_1|diff_2|diff_3|era_-1|era_[0-9]+|event_date|date_event)$')
             ],
             START_TEST: [
-                CallbackQueryHandler(start_test_menu, pattern='^(cancel_test)$'),
+                CallbackQueryHandler(start_test_menu, pattern='^cancel_test$'),
                 CallbackQueryHandler(handle_answer, pattern='^answer_[1-4]$'),
                 CallbackQueryHandler(next_question, pattern='^next_question$'),
                 CallbackQueryHandler(main_menu, pattern='^back_main$'),
-                CallbackQueryHandler(era_diff_menu, pattern='^(difficulty|era)$')
+                CallbackQueryHandler(era_diff_menu, pattern='^(difficulty|era)$'),
+                CallbackQueryHandler(start_test_with_all_questions, pattern='^start_test$'),
+                CallbackQueryHandler(back_to_training_from_test, pattern='^back_training$'),
+                CallbackQueryHandler(continue_intensive_mode, pattern='^continue_intensive$'),
             ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
