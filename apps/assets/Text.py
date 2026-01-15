@@ -16,9 +16,11 @@ def getMainMenu(status="start"):
 Готов начать?
     """)
 
-def getTrainingMenu():
-    return ("""
-Вы выбрали режим тренировки 🎯
+
+
+def getTrainingOptionalMenu(option: str) -> str:
+    return (f"""
+Вы выбрали режим {option}
     
 Какой тип вы хотите?
     """)
@@ -31,11 +33,6 @@ def getStartTestMenu(diff="Любая", era="Любая"):
 Начнём?                                                                                                                                                                                                                                                                                                                              
     """)
 
-def getEventDateMenu(answered_quests, total_quests, cur_quest):
-    return (f"📝 Вопрос {len(answered_quests) + 1}/{total_quests}\n\n"
-            f"Событие: {cur_quest['name']}\n\n"
-            f"Выберите правильную дату:"
-    )
 
 def getDifficultyMenu():
     return (

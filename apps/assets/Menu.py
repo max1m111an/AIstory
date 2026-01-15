@@ -15,6 +15,10 @@ choose_train_menu = [
         [InlineKeyboardButton("⬅️ Назад", callback_data='back_main')],
 ]
 
+diff_keyboard = [
+        [InlineKeyboardButton("🎚 Сложность", callback_data='difficulty')],
+]
+
 era_diff_keyboard = [
         [InlineKeyboardButton("🏺 Эпоха", callback_data='era')],
         [InlineKeyboardButton("🎚 Сложность", callback_data='difficulty')],

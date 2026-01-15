@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import random
 
-from assets import getMainMenu, getTrainingMenu, getStartTestMenu, getEventDateMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
+from assets import getMainMenu, getTrainingOptionalMenu, getStartTestMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
 from .db_handles import get_eras_name, get_events_with_filters
@@ -13,6 +13,12 @@ difficulty_id_to_name = {
     1: "Легкая",
     2: "Средняя",
     3: "Сложная",
+}
+
+train_type_to_str = {
+    'training': 'тренировки 🎯',
+    'marathon': 'марафона 🏃',
+    'intensive': 'интенсива ⚡️',
 }
 
 
@@ -49,10 +55,17 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
+        train_type = context.user_data.get('train_type', 'training')
 
         date_event_keyboard = era_diff_keyboard.copy()
 
-        if has_difficulty and has_era:
+        # Для марафона скрываем выбор эпохи
+        if train_type == 'marathon':
+            # Удаляем кнопку выбора эпохи для марафона
+            date_event_keyboard = [btn for btn in date_event_keyboard if btn[0].callback_data != "era"]
+            
+        # Показываем кнопку "Начать тест" когда все условия выполнены
+        if (train_type == 'marathon' and has_difficulty) or (train_type != 'marathon' and has_difficulty and has_era):
             date_event_keyboard.append(
                 [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
             )
@@ -60,12 +73,19 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
-        await query.edit_message_text(getStartTestMenu(difficulty_name, era_name), reply_markup=reply_markup)
+        
+        # Для марафона меняем текст меню
+        if train_type == 'marathon':
+            menu_text = f"🏃 Марафон\n\nВыберите сложность:\n• {difficulty_name}\n\nНачните тест, чтобы пройти все эпохи подряд!"
+        else:
+            menu_text = getStartTestMenu(difficulty_name, era_name)
+            
+        await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
 
     elif query.data == 'back_training':
         reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingMenu(), reply_markup=reply_markup)
+        await query.edit_message_text(getTrainingOptionalMenu(train_type_to_str[context.user_data.get('train_type')]), reply_markup=reply_markup)
         return TRAINING
 
     elif query.data == 'back_main':
@@ -80,6 +100,8 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
+    train_type = context.user_data.get('train_type', 'training')
+    
     if query.data == "difficulty":
         saved_difficulty_id = context.user_data.get("difficulty")
 
@@ -103,7 +125,8 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(getDifficultyMenu(), reply_markup=reply_markup)
         return SETTING_TEST
 
-    elif query.data == "era":
+    elif query.data == "era" and train_type != 'marathon':
+        # Для режима марафон скрываем выбор эпохи
         saved_era_id = context.user_data.get("era_id")
         eras = await get_eras_name()
 
@@ -138,7 +161,6 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Выберите эпоху:", reply_markup=reply_markup)
         return SETTING_TEST
 
-
     elif query.data == "event_date" or query.data == "date_event":
         context.user_data["test_type"] = ('name', 'date') if query.data == 'event_date' else ('date', 'name')
 
@@ -147,13 +169,19 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
         era_name = await get_era_name_by_id(era_id)
+        train_type = context.user_data.get('train_type', 'training')
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
 
         date_event_keyboard = era_diff_keyboard.copy()
+        
+        # Для марафона скрываем кнопку выбора эпохи
+        if train_type == 'marathon':
+            date_event_keyboard = [btn for btn in date_event_keyboard if btn[0].callback_data != "era"]
 
-        if has_difficulty and has_era:
+        # Условия для отображения кнопки "Начать тест"
+        if (train_type == 'marathon' and has_difficulty) or (train_type != 'marathon' and has_difficulty and has_era):
             date_event_keyboard.append(
                 [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
             )
@@ -161,23 +189,37 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
-        await query.edit_message_text(getStartTestMenu(difficulty_name, era_name), reply_markup=reply_markup)
+        
+        # Меняем текст в зависимости от типа тренировки
+        if train_type == 'marathon':
+            menu_text = f"🏃 Марафон\n\nВыберите сложность:\n• {difficulty_name}\n\nНачните тест, чтобы пройти все эпохи подряд!"
+        else:
+            menu_text = getStartTestMenu(difficulty_name, era_name)
+            
+        await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
 
     elif query.data == "back_training":
         reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingMenu(), reply_markup=reply_markup)
+        await query.edit_message_text(getTrainingOptionalMenu(train_type_to_str[context.user_data.get('train_type')]), reply_markup=reply_markup)
         return TRAINING
 
     elif query.data == "start_test":
         difficulty_id = context.user_data.get("difficulty")
         era_id = context.user_data.get("era_id")
+        train_type = context.user_data.get('train_type', 'training')
 
-        if difficulty_id is None or era_id is None:
-            await query.answer("Сначала выберите сложность и эпоху!", show_alert=True)
-            return SETTING_TEST
+        if train_type == 'marathon':
+            # Для марафона проверяем только сложность
+            if difficulty_id is None:
+                await query.answer("Сначала выберите сложность!", show_alert=True)
+                return SETTING_TEST
+        else:
+            # Для других режимов проверяем и сложность и эпоху
+            if difficulty_id is None or era_id is None:
+                await query.answer("Сначала выберите сложность и эпоху!", show_alert=True)
+                return SETTING_TEST
 
-        print(context.user_data.get("test_type"))
         await start_test_with_all_questions(update, context)
         return START_TEST
 
@@ -190,9 +232,9 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
-    current_test_type = context.user_data.get("test_type")
     current_difficulty = context.user_data.get("difficulty")
     current_era = context.user_data.get("era_id")
+    train_type = context.user_data.get('train_type', 'training')
     
     if data in ('event_date', 'date_event'):
         context.user_data["test_type"] = ('name', 'date') if data == 'event_date' else ('date', 'name')
@@ -214,7 +256,12 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             final_keyboard = era_diff_keyboard.copy()
             
-            if current_difficulty is not None and current_era is not None:
+            # Для марафона скрываем кнопку выбора эпохи
+            if train_type == 'marathon':
+                final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "era"]
+            
+            # Условия для отображения кнопки "Начать тест"
+            if (train_type == 'marathon' and current_difficulty is not None) or (train_type != 'marathon' and current_difficulty is not None and current_era is not None):
                 final_keyboard.append(
                     [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
                 )
@@ -222,7 +269,14 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             final_keyboard.extend(notification_and_back_keyboard)
             
             reply_markup = InlineKeyboardMarkup(final_keyboard)
-            await query.edit_message_text(getStartTestMenu(difficulty_name, era_name), reply_markup=reply_markup)
+            
+            # Меняем текст в зависимости от типа тренировки
+            if train_type == 'marathon':
+                menu_text = f"🏃 Марафон\n\nВыберите сложность:\n• {difficulty_name}\n\nНачните тест, чтобы пройти все эпохи подряд!"
+            else:
+                menu_text = getStartTestMenu(difficulty_name, era_name)
+                
+            await query.edit_message_text(menu_text, reply_markup=reply_markup)
             return SETTING_TEST
 
     parts = data.split("_")
@@ -237,7 +291,22 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if sett == "diff" and id_value is not None:
             context.user_data["difficulty"] = id_value
             
-            if current_era is None:
+            if train_type == 'marathon':
+                # Для марафона сразу показываем меню с кнопкой "Начать тест"
+                difficulty_name = difficulty_id_to_name[id_value] if id_value else "Не выбрана"
+                
+                final_keyboard = era_diff_keyboard.copy()
+                final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "era"]
+                final_keyboard.append(
+                    [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
+                )
+                final_keyboard.extend(notification_and_back_keyboard)
+                
+                reply_markup = InlineKeyboardMarkup(final_keyboard)
+                menu_text = f"🏃 Марафон\n\nВыберите сложность:\n• {difficulty_name}\n\nНачните тест, чтобы пройти все эпохи подряд!"
+                await query.edit_message_text(menu_text, reply_markup=reply_markup)
+                return SETTING_TEST
+            elif current_era is None:
                 era_keyboard = []
                 eras = await get_eras_name()
                 
@@ -263,7 +332,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 final_keyboard = era_diff_keyboard.copy()
                 
-                if id_value is not None and current_era is not None:
+                if train_type != 'marathon' and id_value is not None and current_era is not None:
                     final_keyboard.append(
                         [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
                     )
@@ -271,10 +340,11 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 final_keyboard.extend(notification_and_back_keyboard)
                 
                 reply_markup = InlineKeyboardMarkup(final_keyboard)
-                await query.edit_message_text(getStartTestMenu(difficulty_name, era_name), reply_markup=reply_markup)
+                menu_text = getStartTestMenu(difficulty_name, era_name)
+                await query.edit_message_text(menu_text, reply_markup=reply_markup)
                 return SETTING_TEST
 
-        elif sett == "era" and id_value is not None:
+        elif sett == "era" and id_value is not None and train_type != 'marathon':
             context.user_data["era_id"] = id_value
             
             if current_difficulty is None:
@@ -294,7 +364,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 final_keyboard = era_diff_keyboard.copy()
                 
-                if current_difficulty is not None and id_value is not None:
+                if train_type != 'marathon' and current_difficulty is not None and id_value is not None:
                     final_keyboard.append(
                         [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
                     )
@@ -302,7 +372,8 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 final_keyboard.extend(notification_and_back_keyboard)
                 
                 reply_markup = InlineKeyboardMarkup(final_keyboard)
-                await query.edit_message_text(getStartTestMenu(difficulty_name, era_name), reply_markup=reply_markup)
+                menu_text = getStartTestMenu(difficulty_name, era_name)
+                await query.edit_message_text(menu_text, reply_markup=reply_markup)
                 return SETTING_TEST
     
     elif current_difficulty is None:
@@ -317,7 +388,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(getDifficultyMenu(), reply_markup=reply_markup)
         return SETTING_TEST
     
-    elif current_era is None:
+    elif current_era is None and train_type != 'marathon':
         era_keyboard = []
         eras = await get_eras_name()
         
@@ -343,13 +414,28 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         era_name = await get_era_name_by_id(current_era)
         
         final_keyboard = era_diff_keyboard.copy()
-        final_keyboard.append(
-            [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
-        )
+        
+        # Для марафона скрываем кнопку выбора эпохи
+        if train_type == 'marathon':
+            final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "era"]
+        
+        # Условия для отображения кнопки "Начать тест"
+        if (train_type == 'marathon' and current_difficulty is not None) or (train_type != 'marathon' and current_difficulty is not None and current_era is not None):
+            final_keyboard.append(
+                [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
+            )
+        
         final_keyboard.extend(notification_and_back_keyboard)
         
         reply_markup = InlineKeyboardMarkup(final_keyboard)
-        await query.edit_message_text(getStartTestMenu(difficulty_name, era_name), reply_markup=reply_markup)
+        
+        # Меняем текст в зависимости от типа тренировки
+        if train_type == 'marathon':
+            menu_text = f"🏃 Марафон\n\nВыберите сложность:\n• {difficulty_name}\n\nНачните тест, чтобы пройти все эпохи подряд!"
+        else:
+            menu_text = getStartTestMenu(difficulty_name, era_name)
+            
+        await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
 
 
@@ -359,15 +445,57 @@ async def start_test_with_all_questions(update: Update, context: ContextTypes.DE
 
     difficulty_id = context.user_data.get("difficulty")
     era_id = context.user_data.get("era_id")
+    train_type = context.user_data.get('train_type', 'training')
 
     context.user_data['test_questions'] = []
     context.user_data['test_current_index'] = 0
     context.user_data['test_score'] = 0
     context.user_data['test_difficulty'] = difficulty_id
-    context.user_data['test_era'] = era_id
+    context.user_data['test_era'] = -1 if train_type == 'marathon' else era_id
+    context.user_data['test_train_type'] = train_type
 
-    questions = await get_events_with_filters(difficulty_id if difficulty_id != -1 else None,
-                                              era_id if era_id != -1 else None)
+    if train_type == 'marathon':
+        # РЕЖИМ МАРАФОН: собираем вопросы по всем эпохам
+        questions = []
+        
+        # Получаем все эпохи
+        eras = await get_eras_name()
+        
+        # Для каждой эпохи получаем события
+        for era in eras:
+            era_id = era['id']
+            era_questions = await get_events_with_filters(
+                difficulty_id if difficulty_id != -1 else None,
+                era_id
+            )
+            
+            if era_questions:
+                # Перемешиваем события внутри каждой эпохи
+                random.shuffle(era_questions)
+                # Добавляем метаданные эпохи к каждому вопросу
+                for question in era_questions:
+                    question['era_id'] = era_id
+                    question['era_name'] = era['name']
+                questions.extend(era_questions)
+        
+        # Если не найдено ни одного вопроса (например, выбранная сложность пуста во всех эпохах)
+        # Пробуем получить все события без фильтрации по эпохам
+        if not questions and difficulty_id != -1:
+            questions = await get_events_with_filters(
+                difficulty_id,
+                None  # Все эпохи
+            )
+            # Добавляем информацию об эпохе как "Неизвестно"
+            for question in questions:
+                question['era_id'] = -1
+                question['era_name'] = "Неизвестно"
+                
+    else:
+        # Обычный режим: получаем вопросы по фильтрам
+        questions = await get_events_with_filters(
+            difficulty_id if difficulty_id != -1 else None,
+            era_id if era_id != -1 else None
+        )
 
     if not questions:
         await query.edit_message_text(
@@ -376,7 +504,6 @@ async def start_test_with_all_questions(update: Update, context: ContextTypes.DE
         )
         return SETTING_TEST
 
-    random.shuffle(questions)
     context.user_data['test_questions'] = questions
     context.user_data['test_total_questions'] = len(questions)
     context.user_data['test_answered_questions'] = set()
@@ -408,16 +535,27 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
         await show_final_results(update, context)
         return
 
-    all_questions = await get_events_with_filters(
-        context.user_data.get('test_difficulty') if context.user_data.get('test_difficulty') != -1 else None,
-        context.user_data.get('test_era') if context.user_data.get('test_era') != -1 else None
-    )
+    # Получаем все вопросы для генерации ответов
+    all_questions = questions  # Используем уже загруженные вопросы
 
-    answers = await generate_smart_answers_event_date(current_question, all_questions) if context.user_data.get('test_type')[0] == 'name' else await generate_smart_answers_date_event(current_question, all_questions)
+    # Определяем, какой тип теста: от события к дате или от даты к событию
+    test_type = context.user_data.get('test_type', ('name', 'date'))
+    
+    if test_type[0] == 'name':
+        answers = await generate_smart_answers_event_date(current_question, all_questions)
+    else:
+        answers = await generate_smart_answers_date_event(current_question, all_questions)
 
     context.user_data['current_answers'] = answers
     context.user_data['current_question'] = current_question
-    context.user_data['correct_answer'] = current_question[context.user_data.get("test_type")[1]]
+    context.user_data['correct_answer'] = current_question[test_type[1]]
+    
+    # Добавляем информацию об эпохе для режима марафон
+    era_info = ""
+    train_type = context.user_data.get('test_train_type', 'training')
+    if train_type == 'marathon' and 'era_name' in current_question:
+        era_info = f"\n🏛 Эпоха: {current_question['era_name']}"
+
     keyboard = []
     for i, answer in enumerate(answers, 1):
         keyboard.append([InlineKeyboardButton(answer, callback_data=f'answer_{i}')])
@@ -425,13 +563,16 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
     keyboard.append([InlineKeyboardButton("❌ Завершить тест", callback_data='cancel_test')])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-    if context.user_data.get("test_type")[0] == 'name':
+    
+    if test_type[0] == 'name':
         name_1, name_2 = 'Событие', 'правильную дату'
     else:
         name_1, name_2 = 'Дата', 'правильное событие'
+        
     text = (f"📝 Вопрос {len(answered_questions) + 1}/{total_questions}\n"
-            f"🎚 Сложность: {context.user_data.get('test_difficulty')}\n\n"
-            f"{name_1}: {current_question[context.user_data.get("test_type")[0]]}\n\n"
+            f"🎚 Сложность: {difficulty_id_to_name.get(context.user_data.get('test_difficulty'), 'Любая')}"
+            f"{era_info}\n\n"
+            f"{name_1}: {current_question[test_type[0]]}\n\n"
             f"Выберите {name_2}:")
 
     if update.callback_query:
@@ -451,6 +592,7 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     current_question = context.user_data.get('current_question', {})
     current_index = context.user_data.get('test_current_index', 0)
     answered_questions = context.user_data.get('test_answered_questions', set())
+    test_type = context.user_data.get('test_type', ('name', 'date'))
 
     if answer_num <= len(answers):
         selected_answer = answers[answer_num - 1]
@@ -498,10 +640,18 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         keyboard.append([InlineKeyboardButton("➡️ Следующий вопрос", callback_data='next_question')])
         reply_markup = InlineKeyboardMarkup(keyboard)
-        name_: str = 'Событие' if context.user_data.get("test_type")[0] == 'name' else 'Дата'
+        
+        # Добавляем информацию об эпохе для режима марафон
+        era_info = ""
+        train_type = context.user_data.get('test_train_type', 'training')
+        if train_type == 'marathon' and 'era_name' in current_question:
+            era_info = f"\n🏛 Эпоха: {current_question['era_name']}"
+            
+        name_ = 'Событие' if test_type[0] == 'name' else 'Дата'
         text = (f"📝 Вопрос {len(answered_questions)}/{context.user_data.get('test_total_questions', 0)}\n"
-                f"🎚 Сложность: {context.user_data.get('test_difficulty')}\n\n"
-                f"{name_}: {current_question.get(context.user_data.get("test_type")[0], '')}\n\n"
+                f"🎚 Сложность: {difficulty_id_to_name.get(context.user_data.get('test_difficulty'), 'Любая')}"
+                f"{era_info}\n\n"
+                f"{name_}: {current_question.get(test_type[0], '')}\n\n"
                 f"{result_text}{explanation}")
 
         await query.edit_message_text(text, reply_markup=reply_markup)
@@ -509,6 +659,73 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     return START_TEST
 
 
+async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    score = context.user_data.get('test_score', 0)
+    answered = len(context.user_data.get('test_answered_questions', set()))
+    total = context.user_data.get('test_total_questions', 0)
+    train_type = context.user_data.get('test_train_type', 'training')
+    test_type = context.user_data.get('test_type', ('name', 'date'))
+
+    if answered == 0:
+        percentage = 0
+    else:
+        percentage = (score / answered) * 100
+
+    difficulty_id = context.user_data.get('test_difficulty')
+    difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Любая"
+    
+    # Для марафона показываем специальный текст
+    if train_type == 'marathon':
+        text = (f"🏁 Марафон завершен!\n\n"
+                f"Настройки теста:\n"
+                f"• Сложность: {difficulty_name}\n"
+                f"• Все эпохи подряд\n\n"
+                f"Всего вопросов: {total}\n"
+                f"Отвечено: {answered}\n"
+                f"Правильных ответов: {score}\n"
+                f"Процент правильных: {percentage:.1f}%\n\n")
+    else:
+        era_id = context.user_data.get('test_era')
+        era_name = await get_era_name_by_id(era_id)
+
+        text = (f"🎉 Тест завершен!\n\n"
+                f"Настройки теста:\n"
+                f"• Сложность: {difficulty_name}\n"
+                f"• Эпоха: {era_name}\n\n"
+                f"Всего вопросов: {total}\n"
+                f"Отвечено: {answered}\n"
+                f"Правильных ответов: {score}\n"
+                f"Процент правильных: {percentage:.1f}%\n\n")
+
+    reply_markup = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Начать заново", callback_data=get_callback_type_training(test_type[0]))],
+            [InlineKeyboardButton("📊 Главное меню", callback_data='back_main')]
+        ])
+
+    if answered == 0:
+        text += "Вы не ответили ни на один вопрос."
+    elif percentage >= 90:
+        text += "🏅 Отлично! Вы настоящий историк!"
+    elif percentage >= 70:
+        text += "👍 Хорошо! Продолжайте в том же духе!"
+    elif percentage >= 50:
+        text += "📚 Неплохо, но есть куда расти!"
+    else:
+        text += "💪 Не отчаивайтесь! Практика делает мастера!"
+
+    for key in ['test_questions', 'test_current_index', 'test_score',
+                'test_total_questions', 'test_difficulty', 'test_era', 
+                'test_answered_questions', 'test_train_type']:
+        if key in context.user_data:
+            del context.user_data[key]
+
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup)
+
+
+# Остальные функции остаются без изменений
 async def next_question_all(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -525,59 +742,6 @@ async def next_question_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     await show_next_question_all(update, context)
     return START_TEST
-
-
-async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    score = context.user_data.get('test_score', 0)
-    answered = len(context.user_data.get('test_answered_questions', set()))
-    total = context.user_data.get('test_total_questions', 0)
-
-    if answered == 0:
-        percentage = 0
-    else:
-        percentage = (score / answered) * 100
-
-    difficulty_id = context.user_data.get('test_difficulty')
-    era_id = context.user_data.get('test_era')
-    difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
-
-    era_name = await get_era_name_by_id(era_id)
-    
-    keyboard = [
-        [InlineKeyboardButton("🔄 Начать заново", callback_data=get_callback_type_training(context.user_data.get("test_type")[0]))],
-        [InlineKeyboardButton("📊 Главное меню", callback_data='back_main')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    text = (f"🎉 Тест завершен!\n\n"
-            f"Настройки теста:\n"
-            f"• Сложность: {difficulty_name}\n"
-            f"• Эпоха: {era_name}\n\n"
-            f"Всего вопросов: {total}\n"
-            f"Отвечено: {answered}\n"
-            f"Правильных ответов: {score}\n"
-            f"Процент правильных: {percentage:.1f}%\n\n")
-
-    if answered == 0:
-        text += "Вы не ответили ни на один вопрос."
-    elif percentage >= 90:
-        text += "🏅 Отлично! Вы настоящий историк!"
-    elif percentage >= 70:
-        text += "👍 Хорошо! Продолжайте в том же духе!"
-    elif percentage >= 50:
-        text += "📚 Неплохо, но есть куда расти!"
-    else:
-        text += "💪 Не отчаивайтесь! Практика делает мастера!"
-
-    for key in ['test_questions', 'test_current_index', 'test_score',
-                'test_total_questions', 'test_difficulty', 'test_era', 'test_answered_questions']:
-        if key in context.user_data:
-            del context.user_data[key]
-
-    if update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
-    else:
-        await update.message.reply_text(text, reply_markup=reply_markup)
 
 
 async def start_test_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:

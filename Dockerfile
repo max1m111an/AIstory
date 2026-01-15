@@ -9,5 +9,3 @@ WORKDIR "/app"
 CMD ["python", "main.py"]
 
 FROM mariadb:latest as database
-
-FROM adminer as dbadmin
