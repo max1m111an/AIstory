@@ -33,6 +33,22 @@ def getStartTestMenu(diff="Любая", era="Любая"):
 Начнём?                                                                                                                                                                                                                                                                                                                              
     """)
 
+def getMarathonTestMenu(diff='Любая'):
+    return (f"""
+🏃 Марафон\n
+Выберите сложность:
+• {diff}\n
+Начните тест, чтобы пройти все эпохи подряд!
+    """)
+
+def getIntensiveTestMenu(era='Любая'):
+    return (f"""
+⚡ Интенсив\n
+Выберите эпоху:
+• {era}\n
+Начните тест, чтобы полностью изучить эпоху!
+    """)
+
 
 def getDifficultyMenu():
     return (
