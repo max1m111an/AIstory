@@ -1,12 +1,13 @@
+from datetime import datetime, timedelta
 from io import BytesIO
 from typing import List, Dict
 
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, update
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from database import load_data_to_db, database
-from database.models import EventModel, EraModel
+from database.models import EventModel, EraModel, UserModel
 
 
 async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -67,3 +68,81 @@ async def get_events_with_filters(difficulty: int = None, era_id: int = None) ->
         result = await session.execute(query)
         events = result.all()
         return [{'name': name, 'date': date} for name, date in events]
+
+async def add_user(telegram_id: int) -> UserModel:
+    async with database.session() as session:
+        stmt = select(UserModel).where(UserModel.telegram_id == telegram_id)
+        user = await session.scalar(stmt)
+
+        if user:
+            return user
+
+        user = UserModel(
+            username="",
+            telegram_id=telegram_id,
+            last_update_info=datetime.utcnow(),
+        )
+
+        session.add(user)
+        await session.commit()
+        await session.refresh(user)
+
+        return user
+
+
+async def increment_field(
+    telegram_id: int,
+    field_name: str,
+    value: int = 1,
+):
+    async with database.session() as session:
+
+        stmt = select(UserModel).where(UserModel.telegram_id == telegram_id)
+        user = await session.scalar(stmt)
+
+        if not user:
+            return
+
+        now = datetime.utcnow()
+        start_of_week = now - timedelta(days=now.weekday())
+        start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+        new_week = user.last_update_info is None or user.last_update_info < start_of_week
+
+        update_values = {}
+
+        if not hasattr(UserModel, field_name):
+            raise ValueError(f"Поле {field_name} не существует")
+
+        column = getattr(UserModel, field_name)
+        update_values[field_name] = column + value
+
+        if new_week:
+            for column_name in UserModel.__table__.columns.keys():
+                if column_name.startswith("week_"):
+                    update_values[column_name] = 0
+
+        week_field_name = f"week_{field_name}"
+        if hasattr(UserModel, week_field_name):
+            week_column = getattr(UserModel, week_field_name)
+            update_values[week_field_name] = (week_column if not new_week else 0) + value
+
+        yesterday = (now - timedelta(days=1)).date()
+        last_date = user.last_update_info.date() if user.last_update_info else None
+
+        if last_date == yesterday:
+            update_values["streak_days"] = UserModel.streak_days + 1
+        elif last_date != now.date():
+            update_values["streak_days"] = 1
+
+        update_values["last_update_info"] = now
+
+        stmt = update(UserModel).where(UserModel.telegram_id == telegram_id).values(**update_values)
+        await session.execute(stmt)
+        await session.commit()
+
+async def get_user_by_telegram_id(telegram_id: int) -> UserModel | None:
+    async with database.session() as session:
+        stmt = select(UserModel).where(UserModel.telegram_id == telegram_id)
+        return await session.scalar(stmt)
+
+

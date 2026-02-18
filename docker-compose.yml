@@ -38,5 +38,15 @@ services:
     networks:
       local:
 
+  adminer:
+    image: adminer:latest
+    restart: always
+    ports:
+      - "${ADMINER_PORT}:8080"
+    depends_on:
+      - database
+    networks:
+      local:
+
 networks:
   local:

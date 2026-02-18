@@ -12,6 +12,7 @@ from .data_event import (
     continue_intensive_mode,
     start_test_with_all_questions,
     back_to_training_from_test,
+    show_stats,
 )
 from .db_handles import (
     load_datafile_to_db,
@@ -38,4 +39,5 @@ __all__ = [
     "get_events_name_date",
     "era_diff_menu",
     "back_to_training_from_test",
+    "show_stats",
 ]

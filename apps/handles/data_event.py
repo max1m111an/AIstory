@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import random
@@ -5,8 +7,7 @@ import random
 from assets import getMainMenu, getTrainingOptionalMenu, getStartTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
-from .db_handles import get_eras_name, get_events_with_filters
-
+from .db_handles import get_eras_name, get_events_with_filters, increment_field, get_user_by_telegram_id
 
 difficulty_id_to_name = {
     -1: "Любая",
@@ -91,7 +92,7 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     elif query.data == 'back_training':
         reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingOptionalMenu(train_type_to_str[context.user_data.get('train_type')]), reply_markup=reply_markup)
+        await query.edit_message_text(getTrainingOptionalMenu(context.user_data.get('train_type')), reply_markup=reply_markup)
         return TRAINING
 
     elif query.data == 'back_main':
@@ -204,7 +205,7 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif query.data == "back_training":
         reply_markup = InlineKeyboardMarkup(choose_train_menu)
-        await query.edit_message_text(getTrainingOptionalMenu(train_type_to_str[context.user_data.get('train_type')]), reply_markup=reply_markup)
+        await query.edit_message_text(getTrainingOptionalMenu(context.user_data.get('train_type')), reply_markup=reply_markup)
         return TRAINING
 
     elif query.data == "start_test":
@@ -578,6 +579,9 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
 async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer() if query else None
+
+    user = update.effective_user
+    telegram_id = user.id
     
     score = context.user_data.get('test_score', 0)
     answered = len(context.user_data.get('test_answered_questions', set()))
@@ -642,6 +646,11 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"Правильных ответов: {score}\n"
                 f"Процент правильных: {percentage:.1f}%\n\n")
 
+        await increment_field(telegram_id, 'marathon_completed_cards', answered)
+        if total == answered:
+            await increment_field(telegram_id, 'marathon_completed_full', 1)
+        await increment_field(telegram_id, 'marathon_true_cards', score)
+
     elif train_type == 'intensive':
         era_id = context.user_data.get('test_era', -1)
         era_name = await get_era_name_by_id(era_id)
@@ -654,6 +663,11 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"Отвечено: {answered}\n"
                 f"Правильных ответов: {score}\n"
                 f"Процент правильных: {percentage:.1f}%\n")
+
+        await increment_field(telegram_id, 'intensive_completed_cards', answered)
+        if total == answered:
+            await increment_field(telegram_id, 'intensive_completed_full', 1)
+        await increment_field(telegram_id, 'intensive_true_cards', score)
         
         if incorrect_questions:
             text += f"\n❌ Неправильных ответов: {len(incorrect_questions)}\n"
@@ -672,6 +686,13 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"Отвечено: {answered}\n"
                 f"Правильных ответов: {score}\n"
                 f"Процент правильных: {percentage:.1f}%\n\n")
+
+
+
+        await increment_field(telegram_id, 'training_completed_cards', answered)
+        await increment_field(telegram_id, 'training_completed_full', 1) if total == answered else None
+        await increment_field(telegram_id, 'training_true_cards', score)
+
 
     if answered == 0:
         text += "Вы не ответили ни на один вопрос."
@@ -705,7 +726,7 @@ async def back_to_training_from_test(update: Update, context: ContextTypes.DEFAU
     
     reply_markup = InlineKeyboardMarkup(choose_train_menu)
     await query.edit_message_text(
-        getTrainingOptionalMenu(train_type_to_str[context.user_data.get('train_type', 'training')]), 
+        getTrainingOptionalMenu(context.user_data.get('train_type', 'training')),
         reply_markup=reply_markup
     )
     return TRAINING
