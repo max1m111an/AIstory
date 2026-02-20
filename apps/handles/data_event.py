@@ -7,7 +7,7 @@ import random
 from assets import getMainMenu, getTrainingOptionalMenu, getStartTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
-from .db_handles import get_eras_name, get_events_with_filters, increment_field, get_user_by_telegram_id
+from .db_handles import get_eras_name, get_events_with_filters, increment_field, get_user_by_telegram_id, update_streak
 
 difficulty_id_to_name = {
     -1: "Любая",
@@ -677,7 +677,11 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         era_id = context.user_data.get('test_era', -1)
         era_name = await get_era_name_by_id(era_id)
-        
+
+        if answered >= 10:
+            fire = "Огонек горит 🔥"
+        else:
+            fire = ""
         text = (f"🎉 Тест завершен!\n\n"
                 f"Настройки теста:\n"
                 f"• Сложность: {difficulty_name}\n"
@@ -685,7 +689,8 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"Всего вопросов: {total}\n"
                 f"Отвечено: {answered}\n"
                 f"Правильных ответов: {score}\n"
-                f"Процент правильных: {percentage:.1f}%\n\n")
+                f"Процент правильных: {percentage:.1f}%\n\n"
+                f"{fire}")
 
 
 
@@ -799,7 +804,8 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
         answered_questions.add(current_index)
         context.user_data['test_answered_questions'] = answered_questions
-
+        if len(answered_questions) >= 10:
+            await update_streak(telegram_id=update.effective_user.id)
         result_text = "✅ Правильно!" if is_correct else "❌ Неправильно!"
         try:
             explanation = f"\n\nПравильный ответ: {normalize_date_format(correct_answer)}"
@@ -827,6 +833,7 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f'disabled_{i}')])
 
+        await update_streak(telegram_id=update.effective_chat.id)
         keyboard.append([InlineKeyboardButton("➡️ Следующий вопрос", callback_data='next_question')])
         reply_markup = InlineKeyboardMarkup(keyboard)
         

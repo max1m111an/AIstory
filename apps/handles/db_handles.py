@@ -145,4 +145,43 @@ async def get_user_by_telegram_id(telegram_id: int) -> UserModel | None:
         stmt = select(UserModel).where(UserModel.telegram_id == telegram_id)
         return await session.scalar(stmt)
 
+async def update_streak(telegram_id: int) -> None:
+    async with database.session() as session:
+        stmt = select(UserModel).where(UserModel.telegram_id == telegram_id)
+        user = await session.scalar(stmt)
+
+        if not user:
+            return
+
+        now = datetime.utcnow()
+        today = now.date()
+        yesterday = today - timedelta(days=1)
+        day_before_yesterday = today - timedelta(days=2)
+
+        last_activity_date = (
+            user.last_activity.date() if user.last_activity else None
+        )
+
+        update_values = {}
+
+        if last_activity_date == today:
+            return
+
+        if last_activity_date == yesterday:
+            update_values["streak_days"] = UserModel.streak_days + 1
+
+        else:
+            update_values["streak_days"] = 1
+
+        update_values["last_activity"] = now
+
+        stmt = (
+            update(UserModel)
+            .where(UserModel.telegram_id == telegram_id)
+            .values(**update_values)
+        )
+
+        await session.execute(stmt)
+        await session.commit()
+
 

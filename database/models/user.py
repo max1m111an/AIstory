@@ -78,5 +78,6 @@ class UserModel(Base):
     # ===============================
 
     streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_activity: Mapped[datetime.datetime] = mapped_column(default=datetime.datetime(1970, 1, 1, 0, 0, 0))
 
     last_update_info: Mapped[datetime.datetime] = mapped_column()
