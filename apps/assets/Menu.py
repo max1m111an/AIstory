@@ -27,3 +27,8 @@ notification_and_back_keyboard = [
 back_menu_keyboard = [
         [InlineKeyboardButton("⬅️ Назад", callback_data='back_main')],
 ]
+
+subscribe_keyboard = [
+            [InlineKeyboardButton("📢 Подписаться на канал", url="https://t.me/aisthistory")],
+            [InlineKeyboardButton("✅ Я подписался", callback_data="check_sub_after_start")]
+        ]

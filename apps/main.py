@@ -7,7 +7,7 @@ from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
 from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel, \
     era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions, back_to_training_from_test
 from database import database
-
+from handles.start_menu import check_subscription_after_start
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
@@ -23,7 +23,8 @@ def main():
         entry_points=[CommandHandler('start', start)],
         states={
             MAIN_MENU: [
-                CallbackQueryHandler(main_menu, pattern='^(training|intensive|marathon|streak|stats|back_main)$')
+                CallbackQueryHandler(main_menu, pattern='^(training|intensive|marathon|streak|stats|back_main)$'),
+                CallbackQueryHandler(check_subscription_after_start, pattern='^check_sub_after_start$'),
             ],
             TRAINING: [
                 CallbackQueryHandler(training_menu,

@@ -1,14 +1,52 @@
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from assets import getMainMenu, getTrainingOptionalMenu, choose_train_menu, main_menu_keybord
-from assets.Menu import back_menu_keyboard
+from assets.Menu import back_menu_keyboard, subscribe_keyboard
 from constants import MAIN_MENU, TRAINING
 from handles.db_handles import add_user, get_user_by_telegram_id
 
+from telegram import Update
+from telegram.ext import ContextTypes
+
+
+async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    user_id = update.effective_user.id
+
+    try:
+        chat_member = await context.bot.get_chat_member(
+            chat_id="-1003732977673",
+            user_id=user_id
+        )
+
+        subscribed_statuses = ['member', 'administrator', 'creator']
+
+        return chat_member.status in subscribed_statuses
+
+    except Exception as e:
+        print(f"Ошибка при проверке подписки: {e}")
+        return False
+
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    reply_markup = InlineKeyboardMarkup(main_menu_keybord)
+    """Обработчик команды /start с проверкой подписки"""
 
+    is_subscribed = await check_subscription(update, context)
+
+    if not is_subscribed:
+        await update.message.reply_text(
+            "🚫 Для использования бота необходимо подписаться на наш канал!\n\n"
+            "🔔 После подписки нажмите кнопку 'Я подписался'",
+            reply_markup=InlineKeyboardMarkup(subscribe_keyboard)
+        )
+        return MAIN_MENU
+
+    if "user" not in context.user_data:
+        user = update.effective_user
+        telegram_id = user.id
+        db_user = await add_user(telegram_id)
+        context.user_data["user"] = db_user
+
+    reply_markup = InlineKeyboardMarkup(main_menu_keybord)
     await update.message.reply_text(getMainMenu(), reply_markup=reply_markup)
     return MAIN_MENU
 
@@ -19,6 +57,51 @@ get_message_train_type = {
     "intensive": "интенсива ⚡️"
 }
 
+
+async def check_subscription_after_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Проверяет подписку после нажатия кнопки"""
+    query = update.callback_query
+    await query.answer()
+
+
+    is_subscribed = await check_subscription(update, context)
+
+    if not is_subscribed:
+
+        reply_markup = InlineKeyboardMarkup(subscribe_keyboard)
+
+        try:
+            await query.edit_message_text(
+                "❌ Подписка не найдена!\n\n"
+                "Пожалуйста, подпишитесь на канал и нажмите кнопку снова.\n"
+                "🔄 Попробуйте ещё раз",
+                reply_markup=reply_markup
+            )
+        except Exception as e:
+            if "Message is not modified" in str(e):
+                await query.message.reply_text(
+                    "❌ Подписка всё ещё не найдена!\n\n"
+                    "Пожалуйста, подпишитесь на канал и нажмите кнопку снова.",
+                    reply_markup=reply_markup
+                )
+            else:
+                raise e
+
+        return MAIN_MENU
+
+    if "user" not in context.user_data:
+        user = update.effective_user
+        telegram_id = user.id
+        db_user = await add_user(telegram_id)
+        context.user_data["user"] = db_user
+
+    reply_markup = InlineKeyboardMarkup(main_menu_keybord)
+
+    await query.edit_message_text(
+        getMainMenu(),
+        reply_markup=reply_markup
+    )
+    return MAIN_MENU
 
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -37,7 +120,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await query.edit_message_text(getTrainingOptionalMenu(query.data), reply_markup=reply_markup)
         context.user_data['train_type'] = query.data
         return TRAINING
-    
+
     elif query.data == 'back_main':
         reply_markup = InlineKeyboardMarkup(main_menu_keybord)
         await query.edit_message_text(getMainMenu(), reply_markup=reply_markup)
