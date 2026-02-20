@@ -50,7 +50,7 @@ def getTrainingOptionalMenu(option: str) -> str:
 """)
 
 
-def getStartTestMenu(diff="Любая", era="Любая"):
+def getTrainingTestMenu(diff="Любая", era="Любая"):
     return (f"""
 Выбрана сложность: {diff}
 Выбрана эпоха: {era}

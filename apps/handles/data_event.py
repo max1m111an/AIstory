@@ -1,13 +1,12 @@
-from datetime import datetime
-
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import random
 
-from assets import getMainMenu, getTrainingOptionalMenu, getStartTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
+from assets import getMainMenu, getTrainingOptionalMenu, getTrainingTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, \
+    choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
-from .db_handles import get_eras_name, get_events_with_filters, increment_field, get_user_by_telegram_id, update_streak
+from .db_handles import get_eras_name, get_events_with_filters, increment_field, update_streak
 
 difficulty_id_to_name = {
     -1: "Любая",
@@ -48,7 +47,30 @@ def get_menu_type(type, era, diff):
         case 'intensive':
             return getIntensiveTestMenu(era)
         case _:
-            return getStartTestMenu(diff, era)
+            return getTrainingTestMenu(diff, era)
+        
+
+def get_test_type(data):
+    return ('name', 'date') if data == 'event_date' else ('date', 'name')
+
+
+def update_test_menu(keybord: list[list[InlineKeyboardButton]], train_type: str, prefs: bool):
+    temp_board = keybord.copy()
+
+    print(f"prefs: {prefs}")
+
+    if train_type == 'marathon':
+        temp_board = [btn for btn in temp_board if btn[0].callback_data != "era"]
+
+    elif train_type == 'intensive':
+        temp_board = [btn for btn in temp_board if btn[0].callback_data != "difficulty"]
+            
+    if prefs:
+        temp_board.append(
+            [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
+        )
+
+    return temp_board
 
 
 async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -62,30 +84,22 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     era_name = await get_era_name_by_id(era_id)
     
     if query.data in ('event_date', 'date_event'):
-        context.user_data["test_type"] = ('name', 'date') if query.data == 'event_date' else ('date', 'name')
+        context.user_data["test_type"] = get_test_type(query.data)
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
         train_type = context.user_data.get('train_type', 'training')
 
         date_event_keyboard = era_diff_keyboard.copy()
-
-        if train_type == 'marathon':
-            date_event_keyboard = [btn for btn in date_event_keyboard if btn[0].callback_data != "era"]
-
-        if train_type == 'intensive':
-            date_event_keyboard = [btn for btn in date_event_keyboard if btn[0].callback_data != "difficulty"]
-            
-        if (train_type == 'marathon' and has_difficulty) or (train_type != 'marathon' and has_difficulty and has_era):
-            date_event_keyboard.append(
-                [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
-            )
-
+        date_event_keyboard = update_test_menu(date_event_keyboard, train_type, (train_type == 'marathon' and has_difficulty) \
+                                               or (train_type != 'marathon' and has_difficulty and has_era) \
+                                                or (train_type == 'intensive' and has_era))
+        
         date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
         
-        menu_text = get_menu_type(train_type, difficulty_name, era_name)
+        menu_text = get_menu_type(train_type, era_name, difficulty_name)
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
@@ -169,7 +183,7 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return SETTING_TEST
 
     elif query.data == "event_date" or query.data == "date_event":
-        context.user_data["test_type"] = ('name', 'date') if query.data == 'event_date' else ('date', 'name')
+        context.user_data["test_type"] = get_test_type(query.data)
         train_type = context.user_data.get('train_type', 'training')
 
         difficulty_id = context.user_data.get("difficulty")
@@ -182,23 +196,16 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         has_era = era_id is not None
 
         date_event_keyboard = era_diff_keyboard.copy()
-        
-        if train_type == 'marathon':
-            date_event_keyboard = [btn for btn in date_event_keyboard if btn[0].callback_data != "era"]
 
-        if train_type == 'intensive':
-            date_event_keyboard = [btn for btn in date_event_keyboard if btn[0].callback_data != "difficulty"]
-
-        if (train_type == 'marathon' and has_difficulty) or (train_type != 'marathon' and has_difficulty and has_era):
-            date_event_keyboard.append(
-                [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
-            )
+        date_event_keyboard = update_test_menu(date_event_keyboard, train_type, (train_type == 'marathon' and has_difficulty) \
+                                               or (train_type != 'marathon' and has_difficulty and has_era) \
+                                                or (train_type == 'intensive' and has_era))
 
         date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
         
-        menu_text = get_menu_type(train_type, difficulty_name, era_name)
+        menu_text = get_menu_type(train_type, era_name, difficulty_name)
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
@@ -214,16 +221,16 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         train_type = context.user_data.get('train_type', 'training')
 
         if train_type == 'marathon':
-            if difficulty_id is None:
+            if not difficulty_id:
                 await query.answer("Сначала выберите сложность!", show_alert=True)
                 return SETTING_TEST
             
         elif train_type == 'intensive':
-            if era_id is None:
+            if not era_id:
                 await query.answer("Сначала выберите эпоху!", show_alert=True)
                 return SETTING_TEST
 
-        elif difficulty_id is None or era_id is None:
+        elif not difficulty_id or not era_id:
             await query.answer("Сначала выберите сложность и эпоху!", show_alert=True)
             return SETTING_TEST
 
@@ -246,33 +253,20 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print(data)
     
     if data in ('event_date', 'date_event'):
-        context.user_data["test_type"] = ('name', 'date') if data == 'event_date' else ('date', 'name')
+        context.user_data["test_type"] = get_test_type(query.data)
         
         difficulty_name = difficulty_id_to_name[current_difficulty] if current_difficulty else "Не выбрана"
         era_name = await get_era_name_by_id(current_era)
         
-        final_keyboard = era_diff_keyboard.copy()
-
-        can_start_test: bool = current_difficulty is not None and current_era is not None
-        
-        if train_type == 'marathon':
-            can_start_test = current_difficulty is not None
-            final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "era"]
-        
-        if train_type == 'intensive':
-            can_start_test = current_era is not None
-            final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "difficulty"]
-        
-        if can_start_test:
-            final_keyboard.append(
-                [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
-            )
+        final_keyboard = era_diff_keyboard.copy()        
+        final_keyboard = update_test_menu(final_keyboard, train_type, (train_type == 'marathon' and current_difficulty \
+                                          or train_type == 'intensive' and current_era))
         
         final_keyboard.extend(notification_and_back_keyboard)
         
         reply_markup = InlineKeyboardMarkup(final_keyboard)
         
-        menu_text = get_menu_type(train_type, difficulty_name, era_name)
+        menu_text = get_menu_type(train_type, era_name, difficulty_name)
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
@@ -286,7 +280,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             id_value = None
 
-        if sett == "diff" and id_value is not None:
+        if sett == "diff" and id_value:
             context.user_data["difficulty"] = id_value
             
             if train_type == 'marathon':
@@ -304,7 +298,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await query.edit_message_text(menu_text, reply_markup=reply_markup)
                 return SETTING_TEST
             
-            elif current_era is None and train_type != 'intensive':
+            elif not current_era and train_type != 'intensive':
                 era_keyboard = []
                 eras = await get_eras_name()
                 
@@ -334,8 +328,8 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if train_type == 'intensive':
                     final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "difficulty"]
                 
-                if (train_type == 'intensive' and current_era is not None) or \
-                (train_type == 'training' and id_value is not None and current_era is not None):
+                if (train_type == 'intensive' and current_era ) or \
+                (train_type == 'training' and id_value and current_era):
                     final_keyboard.append(
                         [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
                     )
@@ -343,14 +337,14 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 final_keyboard.extend(notification_and_back_keyboard)
                 
                 reply_markup = InlineKeyboardMarkup(final_keyboard)
-                menu_text = getStartTestMenu(difficulty_name, era_name)
+                menu_text = get_menu_type(train_type, era_name, difficulty_name)
                 await query.edit_message_text(menu_text, reply_markup=reply_markup)
                 return SETTING_TEST
 
         elif sett == "era" and id_value and train_type != 'marathon':
             context.user_data["era_id"] = id_value
             
-            if current_difficulty is None and train_type != 'intensive':
+            if not current_difficulty and train_type != 'intensive':
                 difficulty_keyboard = []
                 for difficulty_id, difficulty_name in difficulty_id_to_name.items():
                     button_text = f"✅ {difficulty_name}" if current_difficulty == difficulty_id else difficulty_name
@@ -371,8 +365,8 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if train_type == 'intensive':
                     final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "difficulty"]
                 
-                if (train_type == 'intensive' and current_era) or \
-                (train_type == 'training' and id_value and current_era):
+                if (train_type == 'intensive' and era_name) or \
+                (train_type == 'training' and id_value and era_name):
                     final_keyboard.append(
                         [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
                     )
@@ -380,7 +374,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 final_keyboard.extend(notification_and_back_keyboard)
                 
                 reply_markup = InlineKeyboardMarkup(final_keyboard)
-                menu_text = getStartTestMenu(difficulty_name, era_name)
+                menu_text = get_menu_type(train_type, era_name, difficulty_name)
                 await query.edit_message_text(menu_text, reply_markup=reply_markup)
                 return SETTING_TEST
     
@@ -423,24 +417,15 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         final_keyboard = era_diff_keyboard.copy()
         
-        if train_type == 'marathon':
-            final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "era"]
-
-        if train_type == 'intensive':
-            final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "difficulty"]
-        
-        if (train_type == 'marathon' and current_difficulty) or \
+        final_keyboard = update_test_menu(final_keyboard, train_type, (train_type == 'marathon' and current_difficulty) or \
         (train_type == 'intensive' and current_era) or \
-        (train_type == 'training' and current_difficulty and current_era):
-            final_keyboard.append(
-                [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
-            )
+        (train_type == 'training' and current_difficulty and current_era))
         
         final_keyboard.extend(notification_and_back_keyboard)
         
         reply_markup = InlineKeyboardMarkup(final_keyboard)
         
-        menu_text = get_menu_type(train_type, difficulty_name, era_name)
+        menu_text = get_menu_type(train_type, era_name, difficulty_name)
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
@@ -529,13 +514,13 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
             break
         current_index += 1
 
-    if current_question is None:
+    if not current_question:
         await show_final_results(update, context)
         return
 
     all_questions = questions
 
-    test_type = context.user_data.get('test_type', ('name', 'date'))
+    test_type = context.user_data.get('test_type')
     
     if test_type[0] == 'name':
         answers = await generate_smart_answers_event_date(current_question, all_questions)
@@ -781,7 +766,7 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     current_question = context.user_data.get('current_question', {})
     current_index = context.user_data.get('test_current_index', 0)
     answered_questions = context.user_data.get('test_answered_questions', set())
-    test_type = context.user_data.get('test_type', ('name', 'date'))
+    test_type = context.user_data.get('test_type')
 
     if answer_num <= len(answers):
         selected_answer = answers[answer_num - 1]

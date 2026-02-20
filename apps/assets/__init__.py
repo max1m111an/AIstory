@@ -2,7 +2,7 @@ from .Text import (
     getMainMenu,
     getTrainingOptionalMenu,
     getDifficultyMenu,
-    getStartTestMenu,
+    getTrainingTestMenu,
     getIntensiveTestMenu,
     getMarathonTestMenu,
 )
@@ -15,7 +15,7 @@ from .Menu import (
 __all__ = [
     "getMainMenu",
     "getTrainingOptionalMenu",
-    "getStartTestMenu",
+    "getTrainingTestMenu",
     "getIntensiveTestMenu",
     "getMarathonTestMenu",
     "main_menu_keybord",
