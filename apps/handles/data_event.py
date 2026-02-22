@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 import random
+from telegram.error import BadRequest
 
 from assets import getMainMenu, getTrainingOptionalMenu, getTrainingTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, \
     choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
@@ -108,7 +109,9 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         reply_markup = InlineKeyboardMarkup(choose_train_menu)
         await query.edit_message_text(getTrainingOptionalMenu(context.user_data.get('train_type')), reply_markup=reply_markup)
         return TRAINING
-
+    elif query.data == 'chronology':
+        await start_chronology_mode(update, context)
+        return START_TEST
     elif query.data == 'back_main':
         reply_markup = InlineKeyboardMarkup(main_menu_keybord)
         await query.edit_message_text(getMainMenu(), reply_markup=reply_markup)
@@ -888,3 +891,204 @@ async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(getMainMenu())
     return ConversationHandler.END
+
+
+async def start_chronology_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    era_id = context.user_data.get("era_id")
+    train_type = context.user_data.get('train_type', 'training')
+
+    questions = await get_events_with_filters(None, era_id if era_id != -1 else None)
+
+    if not questions or len(questions) < 5:
+        await query.edit_message_text(
+            "❌ Недостаточно вопросов для режима хронологии."
+        )
+        return
+
+    random.shuffle(questions)
+    questions = questions[:5]
+
+    context.user_data.update({
+        'chronology_active': True,
+        'chronology_questions': questions,
+        'chronology_dates': [q['date'] for q in questions],
+        'chronology_events': random.sample([q['name'] for q in questions], 5),
+        'chronology_pairs': {},
+        'chronology_selected_date': None,
+        'chronology_used_events': set(),
+        'test_train_type': train_type
+    })
+
+    await render_chronology(update, context)
+
+
+async def render_chronology(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+
+    if not context.user_data.get('chronology_active'):
+        return
+
+    dates = context.user_data.get('chronology_dates', [])
+    events = context.user_data.get('chronology_events', [])
+    pairs = context.user_data.get('chronology_pairs', {})
+    selected_date = context.user_data.get('chronology_selected_date')
+    used_events = context.user_data.get('chronology_used_events', set())
+
+    keyboard = []
+
+    for i in range(5):
+        date_text = dates[i]
+
+        if i == selected_date:
+            date_text = "🟡 " + date_text
+
+        if i in pairs:
+            date_text = "🔗 " + date_text
+
+        keyboard.append([
+            InlineKeyboardButton(date_text, callback_data=f"chronology_date_{i}")
+        ])
+
+
+    for i in range(5):
+        event_text = events[i]
+
+        if i in used_events:
+            event_text = "🔒 " + event_text
+
+        keyboard.append([
+            InlineKeyboardButton(event_text, callback_data=f"chronology_event_{i}")
+        ])
+
+    keyboard.append([
+        InlineKeyboardButton("✅ Проверить", callback_data="check_chronology")
+    ])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+
+    try:
+        await query.edit_message_text(
+            "🧠 Сопоставьте даты и события:\n\n"
+            "1️⃣ Выберите дату\n"
+            "2️⃣ Затем выберите событие\n"
+            "Можно менять выбор до проверки.",
+            reply_markup=reply_markup
+        )
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+async def handle_chronology(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    data = query.data
+
+    if data == "chronology_retry":
+        await start_chronology_mode(update, context)
+        return
+
+    if not context.user_data.get('chronology_active'):
+        await query.answer("⚠️ Сессия завершена. Начните заново.", show_alert=True)
+        return
+
+    pairs = context.user_data.get('chronology_pairs', {})
+    used_events = context.user_data.get('chronology_used_events', set())
+
+    if data.startswith("chronology_date_"):
+        index = int(data.split("_")[-1])
+        context.user_data['chronology_selected_date'] = index
+
+    elif data.startswith("chronology_event_"):
+        event_index = int(data.split("_")[-1])
+        selected_date = context.user_data.get('chronology_selected_date')
+
+        if selected_date is None:
+            return
+
+        if event_index in used_events:
+            await query.answer("⚠️ Это событие уже использовано", show_alert=True)
+            return
+
+        if selected_date in pairs:
+            old_event = pairs[selected_date]
+            used_events.discard(old_event)
+
+        pairs[selected_date] = event_index
+        used_events.add(event_index)
+
+        context.user_data['chronology_selected_date'] = None
+
+    await render_chronology(update, context)
+
+
+async def check_chronology(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    if not context.user_data.get('chronology_active'):
+        return
+
+    pairs = context.user_data.get('chronology_pairs', {})
+    questions = context.user_data.get('chronology_questions', [])
+    shuffled_events = context.user_data.get('chronology_events', [])
+
+    if len(pairs) < 5:
+        await query.answer("⚠️ Сопоставьте все 5 пар!", show_alert=True)
+        return
+
+    correct = 0
+    result_lines = []
+
+    for date_index, event_index in pairs.items():
+        correct_event = questions[date_index]['name']
+        selected_event = shuffled_events[event_index]
+        date_value = questions[date_index]['date']
+
+        if correct_event == selected_event:
+            correct += 1
+            result_lines.append(f"✅ {date_value} — {selected_event}")
+        else:
+            result_lines.append(
+                f"❌ {date_value}\n"
+                f"   Ваш ответ: {selected_event}\n"
+                f"   Правильно: {correct_event}"
+            )
+
+    percent = (correct / 5) * 100
+
+    if correct == 5:
+        await update_streak(telegram_id=update.effective_user.id)
+
+    text = (
+        f"📊 Результат хронологии\n\n"
+        f"Правильно: {correct}/5\n"
+        f"Процент: {percent:.1f}%\n\n"
+        + "\n\n".join(result_lines)
+    )
+
+    keyboard = [
+        [InlineKeyboardButton("🔁 Попробовать снова", callback_data="chronology_retry")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_main")]
+    ]
+
+    try:
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard))
+    except BadRequest as e:
+        if "Message is not modified" not in str(e):
+            raise
+
+    for key in [
+        'chronology_active',
+        'chronology_questions',
+        'chronology_dates',
+        'chronology_events',
+        'chronology_pairs',
+        'chronology_selected_date',
+        'chronology_used_events'
+    ]:
+        context.user_data.pop(key, None)

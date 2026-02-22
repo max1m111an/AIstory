@@ -7,6 +7,7 @@ from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
 from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel, \
     era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions, back_to_training_from_test
 from database import database
+from handles.data_event import start_chronology_mode, check_chronology, handle_chronology
 from handles.start_menu import check_subscription_after_start
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
@@ -45,6 +46,9 @@ def main():
                 CallbackQueryHandler(start_test_with_all_questions, pattern='^start_test$'),
                 CallbackQueryHandler(back_to_training_from_test, pattern='^back_training$'),
                 CallbackQueryHandler(continue_intensive_mode, pattern='^continue_intensive$'),
+                CallbackQueryHandler(handle_chronology, pattern='^chronology_'),
+                CallbackQueryHandler(check_chronology, pattern='^check_chronology$'),
+                CallbackQueryHandler(start_chronology_mode, pattern='^chronology_retry$'),
             ]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
