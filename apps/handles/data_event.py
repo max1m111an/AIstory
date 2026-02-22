@@ -1,10 +1,13 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
-import random
 from telegram.error import BadRequest
+import random
+import pickle
+import base64
+from datetime import datetime
 
-from assets import getMainMenu, getTrainingOptionalMenu, getTrainingTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, \
-    choose_train_menu, main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
+from assets import getMainMenu, getTrainingOptionalMenu, getTrainingTestMenu, getIntensiveTestMenu, getMarathonTestMenu, getDifficultyMenu, get_choose_train, \
+    main_menu_keybord, era_diff_keyboard, notification_and_back_keyboard
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
 from .db_handles import get_eras_name, get_events_with_filters, increment_field, update_streak
@@ -55,13 +58,14 @@ def get_test_type(data):
     return ('name', 'date') if data == 'event_date' else ('date', 'name')
 
 
-def update_test_menu(keybord: list[list[InlineKeyboardButton]], train_type: str, prefs: bool):
+def update_test_menu(keybord: list[list[InlineKeyboardButton]], train_type: str, prefs: bool, has_saved_progress: bool = False):
     temp_board = keybord.copy()
-
-    print(f"prefs: {prefs}")
 
     if train_type == 'marathon':
         temp_board = [btn for btn in temp_board if btn[0].callback_data != "era"]
+        
+        if has_saved_progress:
+            temp_board.insert(0, [InlineKeyboardButton("🔄 Продолжить марафон", callback_data='continue_marathon')])
 
     elif train_type == 'intensive':
         temp_board = [btn for btn in temp_board if btn[0].callback_data != "difficulty"]
@@ -72,6 +76,64 @@ def update_test_menu(keybord: list[list[InlineKeyboardButton]], train_type: str,
         )
 
     return temp_board
+
+
+def save_marathon_progress(context: ContextTypes.DEFAULT_TYPE):
+    if context.user_data.get('train_type') != 'marathon':
+        return
+    
+    progress_data = {
+        'questions': context.user_data.get('test_questions', []),
+        'answered_questions': list(context.user_data.get('test_answered_questions', set())),
+        'score': context.user_data.get('test_score', 0),
+        'current_index': context.user_data.get('test_current_index', 0),
+        'difficulty': context.user_data.get('test_difficulty'),
+        'test_type': context.user_data.get('test_type'),
+        'timestamp': datetime.now().isoformat(),
+        'total_questions': context.user_data.get('test_total_questions', 0),
+        'correct_answers_indices': list(context.user_data.get('correct_answers_indices', set()))
+    }
+    
+    try:
+        context.user_data['marathon_progress'] = base64.b64encode(pickle.dumps(progress_data)).decode('utf-8')
+        context.user_data['has_marathon_progress'] = True
+    except Exception as e:
+        print(f"Ошибка при сохранении прогресса марафона: {e}")
+
+    return START_TEST
+
+
+def load_marathon_progress(context: ContextTypes.DEFAULT_TYPE) -> bool:
+    if not context.user_data.get('has_marathon_progress'):
+        return False
+    
+    try:
+        serialized = context.user_data.get('marathon_progress')
+        if not serialized:
+            return False
+        
+        progress_data = pickle.loads(base64.b64decode(serialized.encode('utf-8')))
+        
+        context.user_data['test_questions'] = progress_data['questions']
+        context.user_data['test_answered_questions'] = set(progress_data['answered_questions'])
+        context.user_data['test_score'] = progress_data['score']
+        context.user_data['test_current_index'] = progress_data['current_index']
+        context.user_data['test_difficulty'] = progress_data['difficulty']
+        context.user_data['test_type'] = progress_data['test_type']
+        context.user_data['test_total_questions'] = progress_data['total_questions']
+        context.user_data['correct_answers_indices'] = set(progress_data['correct_answers_indices'])
+        context.user_data['test_train_type'] = 'marathon'
+        
+        return True
+    
+    except Exception as e:
+        print(f"Ошибка при загрузке прогресса марафона: {e}")
+        return False
+
+
+def clear_marathon_progress(context: ContextTypes.DEFAULT_TYPE):
+    context.user_data.pop('marathon_progress', None)
+    context.user_data.pop('has_marathon_progress', None)
 
 
 async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -90,28 +152,43 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
         train_type = context.user_data.get('train_type', 'training')
+        has_saved_progress = context.user_data.get('has_marathon_progress', False) and train_type == 'marathon'
 
         date_event_keyboard = era_diff_keyboard.copy()
-        date_event_keyboard = update_test_menu(date_event_keyboard, train_type, (train_type == 'marathon' and has_difficulty) \
-                                               or (train_type != 'marathon' and has_difficulty and has_era) \
-                                                or (train_type == 'intensive' and has_era))
+        date_event_keyboard = update_test_menu(
+            date_event_keyboard, 
+            train_type, 
+            (train_type == 'marathon' and has_difficulty) or (train_type != 'marathon' and has_difficulty and has_era) or (train_type == 'intensive' and has_era),
+            has_saved_progress
+        )
         
         date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
         
         menu_text = get_menu_type(train_type, era_name, difficulty_name)
+        
+        # Добавляем информацию о сохраненном прогрессе
+        if has_saved_progress:
+            menu_text += "\n\n📥 У вас есть сохраненный марафон. Нажмите 'Продолжить марафон' чтобы продолжить."
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
 
     elif query.data == 'back_training':
-        reply_markup = InlineKeyboardMarkup(choose_train_menu)
+        reply_markup = InlineKeyboardMarkup(get_choose_train(train_type == 'training'))
         await query.edit_message_text(getTrainingOptionalMenu(context.user_data.get('train_type')), reply_markup=reply_markup)
         return TRAINING
     elif query.data == 'chronology':
         await start_chronology_mode(update, context)
         return START_TEST
+    elif query.data == 'continue_marathon':
+        if load_marathon_progress(context):
+            await show_next_question_all(update, context)
+            return START_TEST
+        else:
+            await query.answer("❌ Не удалось загрузить сохраненный прогресс", show_alert=True)
+            return SETTING_TEST
     elif query.data == 'back_main':
         reply_markup = InlineKeyboardMarkup(main_menu_keybord)
         await query.edit_message_text(getMainMenu(), reply_markup=reply_markup)
@@ -197,24 +274,31 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
+        has_saved_progress = context.user_data.get('has_marathon_progress', False) and train_type == 'marathon'
 
         date_event_keyboard = era_diff_keyboard.copy()
 
-        date_event_keyboard = update_test_menu(date_event_keyboard, train_type, (train_type == 'marathon' and has_difficulty) \
-                                               or (train_type != 'marathon' and has_difficulty and has_era) \
-                                                or (train_type == 'intensive' and has_era))
+        date_event_keyboard = update_test_menu(
+            date_event_keyboard, 
+            train_type, 
+            (train_type == 'marathon' and has_difficulty) or (train_type != 'marathon' and has_difficulty and has_era) or (train_type == 'intensive' and has_era),
+            has_saved_progress
+        )
 
         date_event_keyboard.extend(notification_and_back_keyboard)
 
         reply_markup = InlineKeyboardMarkup(date_event_keyboard)
         
         menu_text = get_menu_type(train_type, era_name, difficulty_name)
+        
+        if has_saved_progress:
+            menu_text += "\n\n📥 У вас есть сохраненный марафон. Нажмите 'Продолжить марафон' чтобы продолжить."
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
 
     elif query.data == "back_training":
-        reply_markup = InlineKeyboardMarkup(choose_train_menu)
+        reply_markup = InlineKeyboardMarkup(get_choose_train(train_type == 'training'))
         await query.edit_message_text(getTrainingOptionalMenu(context.user_data.get('train_type')), reply_markup=reply_markup)
         return TRAINING
 
@@ -239,6 +323,14 @@ async def era_diff_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await start_test_with_all_questions(update, context)
         return START_TEST
+    
+    elif query.data == 'continue_marathon':
+        if load_marathon_progress(context):
+            await show_next_question_all(update, context)
+            return START_TEST
+        else:
+            await query.answer("❌ Не удалось загрузить сохраненный прогресс", show_alert=True)
+            return SETTING_TEST
 
     return SETTING_TEST
 
@@ -252,8 +344,7 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_difficulty = context.user_data.get("difficulty")
     current_era = context.user_data.get("era_id")
     train_type = context.user_data.get('train_type', 'training')
-
-    print(data)
+    has_saved_progress = context.user_data.get('has_marathon_progress', False) and train_type == 'marathon'
     
     if data in ('event_date', 'date_event'):
         context.user_data["test_type"] = get_test_type(query.data)
@@ -262,14 +353,21 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         era_name = await get_era_name_by_id(current_era)
         
         final_keyboard = era_diff_keyboard.copy()        
-        final_keyboard = update_test_menu(final_keyboard, train_type, (train_type == 'marathon' and current_difficulty \
-                                          or train_type == 'intensive' and current_era))
+        final_keyboard = update_test_menu(
+            final_keyboard, 
+            train_type, 
+            (train_type == 'marathon' and current_difficulty) or (train_type == 'intensive' and current_era),
+            has_saved_progress
+        )
         
         final_keyboard.extend(notification_and_back_keyboard)
         
         reply_markup = InlineKeyboardMarkup(final_keyboard)
         
         menu_text = get_menu_type(train_type, era_name, difficulty_name)
+        
+        if has_saved_progress:
+            menu_text += "\n\n📥 У вас есть сохраненный марафон. Нажмите 'Продолжить марафон' чтобы продолжить."
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
@@ -291,6 +389,10 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 final_keyboard = era_diff_keyboard.copy()
                 final_keyboard = [btn for btn in final_keyboard if btn[0].callback_data != "era"]
+                
+                if has_saved_progress:
+                    final_keyboard.insert(0, [InlineKeyboardButton("🔄 Продолжить марафон", callback_data='continue_marathon')])
+                
                 final_keyboard.append(
                     [InlineKeyboardButton("✅ Начать тест", callback_data='start_test')]
                 )
@@ -298,6 +400,10 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
                 reply_markup = InlineKeyboardMarkup(final_keyboard)
                 menu_text = f"🏃 Марафон\n\nВыберите сложность:\n• {difficulty_name}\n\nНачните тест, чтобы пройти все эпохи подряд!"
+                
+                if has_saved_progress:
+                    menu_text += "\n\n📥 У вас есть сохраненный марафон. Нажмите 'Продолжить марафон' чтобы продолжить."
+                    
                 await query.edit_message_text(menu_text, reply_markup=reply_markup)
                 return SETTING_TEST
             
@@ -420,15 +526,21 @@ async def settings_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         final_keyboard = era_diff_keyboard.copy()
         
-        final_keyboard = update_test_menu(final_keyboard, train_type, (train_type == 'marathon' and current_difficulty) or \
-        (train_type == 'intensive' and current_era) or \
-        (train_type == 'training' and current_difficulty and current_era))
+        final_keyboard = update_test_menu(
+            final_keyboard, 
+            train_type, 
+            (train_type == 'marathon' and current_difficulty) or (train_type == 'intensive' and current_era) or (train_type == 'training' and current_difficulty and current_era),
+            has_saved_progress
+        )
         
         final_keyboard.extend(notification_and_back_keyboard)
         
         reply_markup = InlineKeyboardMarkup(final_keyboard)
         
         menu_text = get_menu_type(train_type, era_name, difficulty_name)
+        
+        if has_saved_progress:
+            menu_text += "\n\n📥 У вас есть сохраненный марафон. Нажмите 'Продолжить марафон' чтобы продолжить."
             
         await query.edit_message_text(menu_text, reply_markup=reply_markup)
         return SETTING_TEST
@@ -441,6 +553,9 @@ async def start_test_with_all_questions(update: Update, context: ContextTypes.DE
     difficulty_id = context.user_data.get("difficulty")
     era_id = context.user_data.get("era_id")
     train_type = context.user_data.get('train_type', 'training')
+
+    if train_type == 'marathon':
+        clear_marathon_progress(context)
 
     context.user_data['test_questions'] = []
     context.user_data['test_current_index'] = 0
@@ -543,6 +658,9 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
     for i, answer in enumerate(answers, 1):
         keyboard.append([InlineKeyboardButton(answer, callback_data=f'answer_{i}')])
 
+    if train_type == 'marathon':
+        keyboard.append([InlineKeyboardButton("💾 Сохранить и выйти", callback_data='save_and_exit')])
+    
     keyboard.append([InlineKeyboardButton("❌ Завершить тест", callback_data='cancel_test')])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -638,6 +756,8 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
         if total == answered:
             await increment_field(telegram_id, 'marathon_completed_full', 1)
         await increment_field(telegram_id, 'marathon_true_cards', score)
+        
+        clear_marathon_progress(context)
 
     elif train_type == 'intensive':
         era_id = context.user_data.get('test_era', -1)
@@ -716,10 +836,12 @@ async def show_final_results(update: Update, context: ContextTypes.DEFAULT_TYPE)
 async def back_to_training_from_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    train_type = context.user_data.get('train_type', 'training')
     
-    reply_markup = InlineKeyboardMarkup(choose_train_menu)
+    reply_markup = InlineKeyboardMarkup(get_choose_train(train_type == 'training'))
     await query.edit_message_text(
-        getTrainingOptionalMenu(context.user_data.get('train_type', 'training')),
+        getTrainingOptionalMenu(train_type),
         reply_markup=reply_markup
     )
     return TRAINING
@@ -822,6 +944,10 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f'disabled_{i}')])
 
         await update_streak(telegram_id=update.effective_chat.id)
+        
+        if context.user_data.get('test_train_type') == 'marathon':
+            save_marathon_progress(context)
+            
         keyboard.append([InlineKeyboardButton("➡️ Следующий вопрос", callback_data='next_question')])
         reply_markup = InlineKeyboardMarkup(keyboard)
         
@@ -884,13 +1010,48 @@ async def finish_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cancel_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-
+    
+    if context.user_data.get('test_train_type') == 'marathon':
+        save_marathon_progress(context)
+        await query.edit_message_text(
+            "💾 Прогресс марафона сохранен!\n\n"
+            "Вы можете продолжить позже, выбрав 'Продолжить марафон' в меню настроек.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("⬅️ В меню", callback_data='back_main')]
+            ])
+        )
+        return MAIN_MENU
+    
     await show_final_results(update, context)
 
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await update.message.reply_text(getMainMenu())
     return ConversationHandler.END
+
+
+async def save_and_exit_marathon(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if context.user_data.get('test_train_type') == 'marathon':
+        save_marathon_progress(context)
+        
+        keys_to_clear = ['current_answers', 'current_question', 'correct_answer']
+        for key in keys_to_clear:
+            context.user_data.pop(key, None)
+        
+        await query.edit_message_text(
+            "💾 Прогресс марафона успешно сохранен!\n\n"
+            "Вы можете продолжить позже, выбрав 'Продолжить марафон' в меню марафона.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏃 Вернуться к марафону", callback_data='back_training')],
+                [InlineKeyboardButton("📊 Главное меню", callback_data='back_main')]
+            ])
+        )
+        return TRAINING
+    
+    return START_TEST
 
 
 async def start_chronology_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -963,8 +1124,9 @@ async def render_chronology(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton(event_text, callback_data=f"chronology_event_{i}")
         ])
 
-    keyboard.append([
-        InlineKeyboardButton("✅ Проверить", callback_data="check_chronology")
+    keyboard.extend([
+        [InlineKeyboardButton("✅ Проверить", callback_data="check_chronology")],
+        [InlineKeyboardButton("⬅️ Назад", callback_data="cancel_test")],
     ])
 
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1073,7 +1235,7 @@ async def check_chronology(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     keyboard = [
         [InlineKeyboardButton("🔁 Попробовать снова", callback_data="chronology_retry")],
-        [InlineKeyboardButton("⬅️ Назад", callback_data="back_main")]
+        [InlineKeyboardButton("⬅️ Назад", callback_data="back_main")],
     ]
 
     try:

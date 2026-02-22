@@ -1,24 +1,13 @@
-import datetime
-
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
-from assets import getMainMenu, getTrainingOptionalMenu, choose_train_menu, main_menu_keybord
-from assets.Menu import back_menu_keyboard, subscribe_keyboard, noth_keyboard
+from telegram.error import Forbidden
+from assets import getMainMenu, getTrainingOptionalMenu, main_menu_keybord
+from assets.Menu import back_menu_keyboard, get_choose_train, subscribe_keyboard, noth_keyboard
 from constants import MAIN_MENU, TRAINING
-from handles.db_handles import add_user, get_user_by_telegram_id
-from telegram.ext import Application
-from telegram import Update
-from telegram.ext import ContextTypes
-from telegram.error import Forbidden
+from handles.db_handles import add_user, get_user_by_telegram_id, get_all_users
 import asyncio
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import Forbidden
-
 import random
 import pytz
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.error import Forbidden
-from handles.db_handles import get_all_users
 
 moscow_tz = pytz.timezone("Europe/Moscow")
 
@@ -230,10 +219,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         context.user_data["user"] = db_user
 
     if query.data in ['training', 'marathon', 'intensive']:
-        if query.data == 'marathon':
-            reply_markup = InlineKeyboardMarkup(choose_train_menu[1:])
-        else:
-            reply_markup = InlineKeyboardMarkup(choose_train_menu)
+        reply_markup = InlineKeyboardMarkup(get_choose_train(query.data == 'training'))
 
         await query.edit_message_text(
             getTrainingOptionalMenu(query.data),
@@ -248,7 +234,17 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             getMainMenu(),
             reply_markup=reply_markup
         )
-        return MAIN_MENU
+    
+    elif query.data == 'streak':
+        user = update.effective_user
+        telegram_id = user.id
+
+        this_user = await get_user_by_telegram_id(telegram_id)
+
+        message = get_streak_message(this_user.streak_days)
+
+        reply_markup = InlineKeyboardMarkup(back_menu_keyboard)
+        await query.edit_message_text(message, reply_markup=reply_markup)
 
     elif query.data == 'stats':
         user = update.effective_user
@@ -315,6 +311,5 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
         reply_markup = InlineKeyboardMarkup(back_menu_keyboard)
         await query.edit_message_text(message, reply_markup=reply_markup)
-        return MAIN_MENU
 
     return MAIN_MENU
