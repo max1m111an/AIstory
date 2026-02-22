@@ -1,14 +1,95 @@
+import datetime
+
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from assets import getMainMenu, getTrainingOptionalMenu, choose_train_menu, main_menu_keybord
-from assets.Menu import back_menu_keyboard, subscribe_keyboard
+from assets.Menu import back_menu_keyboard, subscribe_keyboard, noth_keyboard
 from constants import MAIN_MENU, TRAINING
-from handles.db_handles import add_user, get_user_by_telegram_id, get_all_users
+from handles.db_handles import add_user, get_user_by_telegram_id
 from telegram.ext import Application
 from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.error import Forbidden
 import asyncio
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import Forbidden
+
+import random
+import pytz
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import Forbidden
+from handles.db_handles import get_all_users
+
+moscow_tz = pytz.timezone("Europe/Moscow")
+
+SPECIAL_STREAK_MESSAGES = {
+    1: "🎉 И ты начал! Первый день — самый важный. Ждём тебя завтра!",
+    3: "📈 Уже 3 дня! Первая привычка формируется. Ты на верном пути!",
+    7: "🏆 Целая неделя исторического стрика! Ты вошёл в ритм. Не сбавляй!",
+    14: "✨ Две недели без перерыва! Твой прогресс уже заметен самому себе.",
+    30: "🗓️ Месяц регулярных занятий! Ты — пример исторической дисциплины. Настоящий архивариус!",
+    100: "🏛️ СТО ДНЕЙ! Твой стрик догнал Наполеона. Но твоя империя знаний только крепнет!",
+}
+
+DEFAULT_STREAK_MESSAGES = [
+    "🔥 Полыхает! Огненная серия из {day} дней.",
+    "📚 Цепочка знаний крепнет: {day} день подряд!",
+    "⏳ Ты не пропускаешь уже {day} дней. Системность — ключ!",
+    "✨ {day}-й день твоего исторического рывка. Завтра будет легче!",
+    "🧠 Твой мозг благодарен за {day} дней регулярной тренировки.",
+    "🗺️ Ты открываешь новые земли знаний уже {day} дней.",
+    "📜 {day} дней летописи твоих побед. Внеси ещё одну запись завтра!",
+    "👑 Ровно {day} дней. Этого хватило, чтобы свергнуть не одного короля.",
+    "🏛️ Твоя {day}-дневная дисциплина достойна легионера!",
+    "⚔️ {day} дней подряд. Примерно столько длилась Столетняя война... если верить названию.",
+]
+
+MOTIVATIONAL_MESSAGES = [
+    "💪 Сегодня твой день! Начни хоть с одной карточки — и стрик пойдёт.",
+    "🚀 Каждый большой путь начинается с маленького шага. Сделай его сегодня!",
+    "🌟 Не откладывай на завтра то, что может сделать твой прогресс сегодня.",
+    "📚 Каждая минута тренировок приближает тебя к цели. Давай начнём!",
+]
+
+def get_streak_message(days: int) -> str:
+    if days > 0:
+        if days in SPECIAL_STREAK_MESSAGES:
+            return SPECIAL_STREAK_MESSAGES[days]
+        return random.choice(DEFAULT_STREAK_MESSAGES).format(day=days)
+    else:
+        return random.choice(MOTIVATIONAL_MESSAGES)
+
+
+async def send_daily_streak_reminder(context):
+    bot = context.bot
+    users = await get_all_users()
+
+    for user in users:
+        try:
+            last_activity = user.last_activity
+            if last_activity.tzinfo is None:
+                last_activity = last_activity.replace(tzinfo=moscow_tz)
+            last_activity = last_activity.astimezone(moscow_tz).date()
+
+            text = get_streak_message(user.streak_days)
+
+            print(f"[STREAK] Отправляю {user.telegram_id} - стрик {user.streak_days}, last_activity {last_activity}")
+
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=text,
+                reply_markup=InlineKeyboardMarkup(noth_keyboard)
+            )
+
+            print(f"[STREAK] Сообщение успешно отправлено {user.telegram_id}")
+
+        except Forbidden:
+            print(f"[STREAK] Пользователь {user.telegram_id} заблокировал бота")
+        except Exception as e:
+            print(f"[STREAK] Ошибка отправки {user.telegram_id}: {e}")
+
+    return MAIN_MENU
+
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id

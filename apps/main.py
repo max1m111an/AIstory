@@ -1,29 +1,41 @@
 import os
 import asyncio
-
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ConversationHandler
+from datetime import time
+from zoneinfo import ZoneInfo
+from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler
 
 from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
-from handles import start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel, \
-    era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions, back_to_training_from_test
+from handles import (
+    start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel,
+    era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions,
+    back_to_training_from_test
+)
 from database import database
 from handles.data_event import start_chronology_mode, check_chronology, handle_chronology
-from handles.start_menu import check_subscription_after_start, notify_maintenance
+from handles.start_menu import check_subscription_after_start, notify_maintenance, send_daily_streak_reminder
+
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
 
 def main():
-    """Основная функция запуска бота"""
     loop = asyncio.get_event_loop()
     loop.run_until_complete(database.init())
 
     application = Application.builder().token(BOT_TOKEN).build()
 
-    async def on_startup(app: Application):
+    async def startup_tasks(app):
         await notify_maintenance(app)
 
-    application.post_init = on_startup
+        app.job_queue.run_daily(
+            send_daily_streak_reminder,
+            time=time(hour=12, minute=37, tzinfo=MOSCOW_TZ),
+            days=(0,1,2,3,4,5,6),  # каждый день недели
+            name="daily_streak",
+        )
+
+    application.post_init = startup_tasks
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
@@ -60,6 +72,7 @@ def main():
     )
 
     application.add_handler(conv_handler)
+
     application.run_polling()
 
 
