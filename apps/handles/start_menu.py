@@ -3,11 +3,12 @@ from telegram.ext import ContextTypes
 from assets import getMainMenu, getTrainingOptionalMenu, choose_train_menu, main_menu_keybord
 from assets.Menu import back_menu_keyboard, subscribe_keyboard
 from constants import MAIN_MENU, TRAINING
-from handles.db_handles import add_user, get_user_by_telegram_id
-
+from handles.db_handles import add_user, get_user_by_telegram_id, get_all_users
+from telegram.ext import Application
 from telegram import Update
 from telegram.ext import ContextTypes
-
+from telegram.error import Forbidden
+import asyncio
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     user_id = update.effective_user.id
@@ -26,6 +27,29 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
         print(f"Ошибка при проверке подписки: {e}")
         return False
 
+
+
+async def notify_maintenance(application):
+
+    users = await get_all_users()
+
+    for user in users:
+        try:
+            await application.bot.send_message(
+                chat_id=user.telegram_id,   # ✅ правильно
+                text=(
+                    "⚙️ Бот был перезапущен после технического обслуживания.\n\n"
+                    "Пожалуйста, нажмите /start чтобы продолжить работу."
+                )
+            )
+
+            await asyncio.sleep(0.05)  # защита от flood limit
+
+        except Forbidden:
+            print(f"Пользователь {user.telegram_id} заблокировал бота")
+
+        except Exception as e:
+            print(f"Не удалось отправить {user.telegram_id}: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обработчик команды /start с проверкой подписки"""

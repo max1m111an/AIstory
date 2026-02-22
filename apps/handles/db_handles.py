@@ -184,4 +184,11 @@ async def update_streak(telegram_id: int) -> None:
         await session.execute(stmt)
         await session.commit()
 
+async def get_all_users() -> List[UserModel]:
+    """Получает всех пользователей из базы данных"""
+    async with database.session() as session:
+        stmt = select(UserModel).order_by(UserModel.id)
+        result = await session.execute(stmt)
+        users = result.scalars().all()
+        return list(users)
 

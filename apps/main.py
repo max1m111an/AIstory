@@ -8,7 +8,7 @@ from handles import start, main_menu, training_menu, start_test_menu, handle_ans
     era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions, back_to_training_from_test
 from database import database
 from handles.data_event import start_chronology_mode, check_chronology, handle_chronology
-from handles.start_menu import check_subscription_after_start
+from handles.start_menu import check_subscription_after_start, notify_maintenance
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
 
@@ -19,6 +19,11 @@ def main():
     loop.run_until_complete(database.init())
 
     application = Application.builder().token(BOT_TOKEN).build()
+
+    async def on_startup(app: Application):
+        await notify_maintenance(app)
+
+    application.post_init = on_startup
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler('start', start)],
