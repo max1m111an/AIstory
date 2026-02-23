@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   history:
     depends_on:
@@ -13,12 +15,13 @@ services:
       - "./apps/:/app/"
       - "./database/:/app/database/"
     networks:
-      local:
+      - local
 
   database:
     build:
       dockerfile: "Dockerfile"
       target: "database"
+      context: .
     environment:
       MARIADB_RANDOM_ROOT_PASSWORD: 1
       MARIADB_USER: "${DB_USER}"
@@ -28,6 +31,7 @@ services:
     expose:
       - 3306
     volumes:
+      - db_data:/var/lib/mysql
       - "./database/dumps/:/docker-entrypoint-initdb.d:ro"
     healthcheck:
       test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
@@ -36,7 +40,35 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      local:
+      - local
+
+  backup:
+    image: debian:bookworm-slim
+    environment:
+      DB_HOST: database
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+    volumes:
+      - ./database/backups:/backup
+    depends_on:
+      database:
+        condition: service_healthy
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y mariadb-client netcat-openbsd &&
+      echo 'Waiting for database...' &&
+      until nc -z database 3306; do sleep 3; done &&
+      echo 'Database is up!' &&
+      while true; do
+        mysqldump -h $$DB_HOST -u$$DB_USER -p$$DB_PASS $$DB_NAME | gzip > /backup/backup_$$(date +%Y%m%d_%H%M).sql.gz;
+        find /backup -type f -name '*.gz' -mtime +7 -delete;
+        sleep 60;
+      done
+      "
+    networks:
+      - local
 
   adminer:
     image: adminer:latest
@@ -46,7 +78,10 @@ services:
     depends_on:
       - database
     networks:
-      local:
+      - local
 
 networks:
   local:
+
+volumes:
+  db_data:
