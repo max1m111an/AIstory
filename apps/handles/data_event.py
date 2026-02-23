@@ -602,7 +602,7 @@ async def start_test_with_all_questions(update: Update, context: ContextTypes.DE
     if not questions:
         await query.edit_message_text(
             "❌ Не удалось найти вопросы с выбранными параметрами.\n"
-
+        )
 
         return SETTING_TEST
 
