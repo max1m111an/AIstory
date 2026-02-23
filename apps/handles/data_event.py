@@ -597,12 +597,13 @@ async def start_test_with_all_questions(update: Update, context: ContextTypes.DE
             None,  # difficulty_id if difficulty_id != -1 else None,
             era_id if era_id != -1 else None
         )
+        random.shuffle(questions)
 
     if not questions:
         await query.edit_message_text(
             "❌ Не удалось найти вопросы с выбранными параметрами.\n"
-            "Попробуйте изменить настройки."
-        )
+
+
         return SETTING_TEST
 
     context.user_data['test_questions'] = questions
