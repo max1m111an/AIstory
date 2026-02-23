@@ -64,7 +64,7 @@ services:
       while true; do
         mysqldump -h $$DB_HOST -u$$DB_USER -p$$DB_PASS $$DB_NAME | gzip > /backup/backup_$$(date +%Y%m%d_%H%M).sql.gz;
         find /backup -type f -name '*.gz' -mtime +7 -delete;
-        sleep 60;
+        sleep 21600;
       done
       "
     networks:
