@@ -2,8 +2,9 @@ import os
 import asyncio
 from datetime import time
 from zoneinfo import ZoneInfo
-from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue
+from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue, MessageHandler, filters
 
+from apps.handles.db_handles import load_datafile_to_db
 from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
 from handles import (
     start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel,
@@ -73,6 +74,7 @@ def main():
     )
 
     application.add_handler(conv_handler)
+    application.add_handler(MessageHandler(filters.Document.ALL, load_datafile_to_db))
 
     application.run_polling()
 
