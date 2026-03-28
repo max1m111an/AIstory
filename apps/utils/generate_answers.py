@@ -271,29 +271,12 @@ async def generate_smart_answers_event_date(correct_question: Dict, all_question
 
 async def generate_smart_answers_date_event(correct_answer: Dict, all_answers: List[Dict]) -> List[str]:
     correct_event = correct_answer['name']
-
     all_events = list(set(q['name'] for q in all_answers if 'name' in q))
     
     wrong_events = [event for event in all_events if event != correct_event]
+    random.shuffle(wrong_events)
+    wrong_answers = wrong_events[:3]
     
-    wrong_answers = []
-    
-    if len(wrong_events) >= 3:
-        wrong_answers = random.sample(wrong_events, 3)
-    elif wrong_events:
-        wrong_answers = wrong_events.copy()
-        while len(wrong_answers) < 3:
-            fake_event = str(random.randint(1, 1000))
-            if fake_event not in wrong_answers and fake_event != correct_event:
-                wrong_answers.append(fake_event)
-    else:
-        while len(wrong_answers) < 3:
-            fake_event = str(random.randint(1, 1000))
-            if fake_event not in wrong_answers and fake_event != correct_event:
-                wrong_answers.append(fake_event)
-    
-    all_options = [correct_event] + wrong_answers[:3]
-    
+    all_options = [correct_event] + wrong_answers
     random.shuffle(all_options)
-    
     return all_options

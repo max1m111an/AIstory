@@ -168,7 +168,6 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
         
         menu_text = get_menu_type(train_type, era_name, difficulty_name)
         
-        # Добавляем информацию о сохраненном прогрессе
         if has_saved_progress:
             menu_text += "\n\n📥 У вас есть сохраненный марафон. Нажмите 'Продолжить марафон' чтобы продолжить."
             

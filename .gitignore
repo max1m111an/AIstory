@@ -7,3 +7,4 @@ venv
 .python-version
 poetry.lock
 /database/dumps/*
+/database/backups/*

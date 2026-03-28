@@ -4,7 +4,7 @@ from datetime import time
 from zoneinfo import ZoneInfo
 from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue, MessageHandler, filters
 
-from apps.handles.db_handles import load_datafile_to_db
+from handles.db_handles import load_datafile_to_db
 from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
 from handles import (
     start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel,
@@ -12,7 +12,7 @@ from handles import (
     back_to_training_from_test, save_and_exit_marathon
 )
 from database import database
-from handles.data_event import start_chronology_mode, check_chronology, handle_chronology
+from apps.handles.event_handler import start_chronology_mode, check_chronology, handle_chronology
 from handles.start_menu import check_subscription_after_start, notify_maintenance, send_daily_streak_reminder
 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")

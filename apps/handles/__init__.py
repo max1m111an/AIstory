@@ -1,4 +1,4 @@
-from .data_event import (
+from .event_handler import (
     training_menu,
     start_test_menu,
     handle_answer,
