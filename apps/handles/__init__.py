@@ -13,6 +13,9 @@ from .event_handler import (
     start_test_with_all_questions,
     back_to_training_from_test,
     save_and_exit_marathon,
+    handle_chronology,
+    check_chronology,
+    start_chronology_mode,
 )
 from .db_handles import (
     load_datafile_to_db,
@@ -39,4 +42,7 @@ __all__ = [
     "era_diff_menu",
     "back_to_training_from_test",
     "save_and_exit_marathon",
+    "handle_chronology",
+    "check_chronology",
+    "start_chronology_mode",
 ]
