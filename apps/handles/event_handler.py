@@ -657,8 +657,9 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
         era_info = f"\n🏛 Эпоха: {current_question['era_name']}"
 
     keyboard = []
-    for i, answer in enumerate(answers, 1):
-        keyboard.append([InlineKeyboardButton(answer, callback_data=f'answer_{i}')])
+    numbered_answers = [f"{i}. {answer}" for i, answer in enumerate(answers, 1)]
+    for i, _ in enumerate(answers, 1):
+        keyboard.append([InlineKeyboardButton(str(i), callback_data=f'answer_{i}')])
 
     if train_type == 'marathon':
         keyboard.append([InlineKeyboardButton("💾 Сохранить и выйти", callback_data='save_and_exit')])
@@ -676,7 +677,8 @@ async def show_next_question_all(update: Update, context: ContextTypes.DEFAULT_T
             f"🎚 Сложность: {difficulty_id_to_name.get(context.user_data.get('test_difficulty'), 'Любая')}"
             f"{era_info}\n\n"
             f"{name_1}: {current_question[test_type[0]]}\n\n"
-            f"Выберите {name_2}:")
+            f"Выберите {name_2}:\n"
+            f"{chr(10).join(numbered_answers)}")
 
     if update.callback_query:
         await update.callback_query.edit_message_text(text, reply_markup=reply_markup)
@@ -925,23 +927,30 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
             explanation = f"\n\nПравильный ответ: {correct_answer}"
 
         keyboard = []
+        detailed_answers = []
         for i, answer in enumerate(answers, 1):
             try:
                 normalized_answer = normalize_date_format(answer)
                 normalized_correct = normalize_date_format(correct_answer)
                 if normalized_answer == normalized_correct:
-                    button_text = f"✅ {answer}"
+                    button_text = "✅"
+                    detailed_answers.append(f"{i}. ✅ {answer}")
                 elif i == answer_num and not is_correct:
-                    button_text = f"❌ {answer}"
+                    button_text = "❌"
+                    detailed_answers.append(f"{i}. ❌ {answer}")
                 else:
-                    button_text = answer
+                    button_text = str(i)
+                    detailed_answers.append(f"{i}. {answer}")
             except Exception:
                 if answer == correct_answer:
-                    button_text = f"✅ {answer}"
+                    button_text = "✅"
+                    detailed_answers.append(f"{i}. ✅ {answer}")
                 elif i == answer_num and not is_correct:
-                    button_text = f"❌ {answer}"
+                    button_text = "❌"
+                    detailed_answers.append(f"{i}. ❌ {answer}")
                 else:
-                    button_text = answer
+                    button_text = str(i)
+                    detailed_answers.append(f"{i}. {answer}")
 
             keyboard.append([InlineKeyboardButton(button_text, callback_data=f'disabled_{i}')])
 
@@ -963,7 +972,8 @@ async def handle_answer_all(update: Update, context: ContextTypes.DEFAULT_TYPE) 
                 f"🎚 Сложность: {difficulty_id_to_name.get(context.user_data.get('test_difficulty'), 'Любая')}"
                 f"{era_info}\n\n"
                 f"{name_}: {current_question.get(test_type[0], '')}\n\n"
-                f"{result_text}{explanation}")
+                f"{result_text}{explanation}\n\n"
+                f"Варианты:\n{chr(10).join(detailed_answers)}")
 
         await query.edit_message_text(text, reply_markup=reply_markup)
 
