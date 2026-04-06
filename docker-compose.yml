@@ -11,6 +11,29 @@ services:
       target: "history"
     env_file:
       - ".env"
+    environment:
+      BOT_RECYCLE_SECONDS: "${BOT_RECYCLE_SECONDS:-0}"
+      BOT_RESTART_DELAY_SECONDS: "${BOT_RESTART_DELAY_SECONDS:-5}"
+    command: >
+      bash -c "
+      while true; do
+        echo '[history] starting bot process';
+        python main.py &
+        BOT_PID=$$!;
+
+        if [ "$${BOT_RECYCLE_SECONDS:-0}" -gt 0 ]; then
+          echo "[history] recycle in $${BOT_RECYCLE_SECONDS}s";
+          sleep "$${BOT_RECYCLE_SECONDS}";
+          kill -TERM "$$BOT_PID" 2>/dev/null || true;
+        fi;
+
+        wait "$$BOT_PID";
+        EXIT_CODE=$$?;
+        echo "[history] bot exited with code $$EXIT_CODE. restarting in $${BOT_RESTART_DELAY_SECONDS}s";
+        sleep "$${BOT_RESTART_DELAY_SECONDS:-5}";
+      done
+      "
+    restart: unless-stopped
     volumes:
       - "./apps/:/app/"
       - "./database/:/app/database/"
@@ -22,6 +45,7 @@ services:
       dockerfile: "Dockerfile"
       target: "database"
       context: .
+    restart: unless-stopped
     environment:
       MARIADB_RANDOM_ROOT_PASSWORD: 1
       MARIADB_USER: "${DB_USER}"
@@ -44,6 +68,7 @@ services:
 
   backup:
     image: debian:bookworm-slim
+    restart: unless-stopped
     environment:
       DB_HOST: database
       DB_NAME: ${DB_NAME}
@@ -57,10 +82,10 @@ services:
     command: >
       bash -c "
       apt-get update &&
-      apt-get install -y mariadb-client netcat-openbsd &&
-      echo 'Waiting for database...' &&
-      until nc -z database 3306; do sleep 3; done &&
-      echo 'Database is up!' &&
+      apt-get install -y mariadb-client &&
+      echo 'Waiting for database with authentication...' &&
+      until mariadb-admin ping -h $$DB_HOST -u$$DB_USER -p$$DB_PASS --silent; do sleep 3; done &&
+      echo 'Database is up and authenticated!' &&
       while true; do
         mysqldump -h $$DB_HOST -u$$DB_USER -p$$DB_PASS $$DB_NAME | gzip > /backup/backup_$$(date +%Y%m%d_%H%M).sql.gz;
         find /backup -type f -name '*.gz' -mtime +7 -delete;
