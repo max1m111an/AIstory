@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import Forbidden
+import logging
 from assets import getMainMenu, getTrainingOptionalMenu, main_menu_keybord
 from assets.Menu import back_menu_keyboard, get_choose_train, subscribe_keyboard, noth_keyboard
 from constants import MAIN_MENU, TRAINING
@@ -10,6 +11,7 @@ import random
 import pytz
 
 moscow_tz = pytz.timezone("Europe/Moscow")
+logger = logging.getLogger(__name__)
 
 SPECIAL_STREAK_MESSAGES = {
     1: "🎉 И ты начал! Первый день — самый важный. Ждём тебя завтра!",
@@ -62,7 +64,12 @@ async def send_daily_streak_reminder(context):
 
             text = get_streak_message(user.streak_days)
 
-            print(f"[STREAK] Отправляю {user.telegram_id} - стрик {user.streak_days}, last_activity {last_activity}")
+            logger.info(
+                "[STREAK] Отправляю %s - стрик %s, last_activity %s",
+                user.telegram_id,
+                user.streak_days,
+                last_activity,
+            )
 
             await bot.send_message(
                 chat_id=user.telegram_id,
@@ -70,12 +77,12 @@ async def send_daily_streak_reminder(context):
                 reply_markup=InlineKeyboardMarkup(noth_keyboard)
             )
 
-            print(f"[STREAK] Сообщение успешно отправлено {user.telegram_id}")
+            logger.info("[STREAK] Сообщение успешно отправлено %s", user.telegram_id)
 
         except Forbidden:
-            print(f"[STREAK] Пользователь {user.telegram_id} заблокировал бота")
-        except Exception as e:
-            print(f"[STREAK] Ошибка отправки {user.telegram_id}: {e}")
+            logger.warning("[STREAK] Пользователь %s заблокировал бота", user.telegram_id)
+        except Exception:
+            logger.exception("[STREAK] Ошибка отправки %s", user.telegram_id)
 
     return MAIN_MENU
 
@@ -93,8 +100,8 @@ async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
         return chat_member.status in subscribed_statuses
 
-    except Exception as e:
-        print(f"Ошибка при проверке подписки: {e}")
+    except Exception:
+        logger.exception("Ошибка при проверке подписки в сервисе history")
         return False
 
 
@@ -116,10 +123,10 @@ async def notify_maintenance(application):
             await asyncio.sleep(0.05)  # защита от flood limit
 
         except Forbidden:
-            print(f"Пользователь {user.telegram_id} заблокировал бота")
+            logger.warning("Пользователь %s заблокировал бота", user.telegram_id)
 
-        except Exception as e:
-            print(f"Не удалось отправить {user.telegram_id}: {e}")
+        except Exception:
+            logger.exception("Не удалось отправить уведомление пользователю %s", user.telegram_id)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обработчик команды /start с проверкой подписки"""

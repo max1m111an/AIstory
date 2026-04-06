@@ -1,4 +1,5 @@
 import os
+import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Any
@@ -10,6 +11,8 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -81,7 +84,7 @@ class Database:
 
         async with self._sessionmaker() as session:
             res = await session.execute(stmt)
-            print(res)
+            logger.debug("Scalar query executed: %s", stmt)
 
         return res.scalar()
 
