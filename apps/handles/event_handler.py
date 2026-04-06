@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes, ConversationHandler
 from telegram.error import BadRequest
+import logging
 import random
 import pickle
 import base64
@@ -11,6 +12,7 @@ from assets import getMainMenu, getTrainingOptionalMenu, getTrainingTestMenu, ge
 from constants import MAIN_MENU, TRAINING, START_TEST, SETTING_TEST
 from utils import generate_smart_answers_event_date, generate_smart_answers_date_event, normalize_date_format
 from .db_handles import get_eras_name, get_events_with_filters, increment_field, update_streak
+logger = logging.getLogger(__name__)
 
 difficulty_id_to_name = {
     -1: "Любая",
@@ -97,8 +99,8 @@ def save_marathon_progress(context: ContextTypes.DEFAULT_TYPE):
     try:
         context.user_data['marathon_progress'] = base64.b64encode(pickle.dumps(progress_data)).decode('utf-8')
         context.user_data['has_marathon_progress'] = True
-    except Exception as e:
-        print(f"Ошибка при сохранении прогресса марафона: {e}")
+    except Exception:
+        logger.exception("Ошибка при сохранении прогресса марафона")
 
     return START_TEST
 
@@ -126,8 +128,8 @@ def load_marathon_progress(context: ContextTypes.DEFAULT_TYPE) -> bool:
         
         return True
     
-    except Exception as e:
-        print(f"Ошибка при загрузке прогресса марафона: {e}")
+    except Exception:
+        logger.exception("Ошибка при загрузке прогресса марафона")
         return False
 
 

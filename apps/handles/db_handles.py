@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 from io import BytesIO
 from typing import List, Dict
+import logging
 
 from sqlalchemy import select, and_, update
 from telegram import Update
@@ -9,10 +10,12 @@ from telegram.ext import ContextTypes
 from database import load_data_to_db, database
 from database.models import EventModel, EraModel, UserModel
 
+logger = logging.getLogger(__name__)
+
 
 async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     document = update.message.document
-    print(document.file_name)
+    logger.info("Получен файл для загрузки: %s", document.file_name)
     await update.message.reply_text(f"File: {document.file_name}, Size: {document.file_size}")
 
     if document.mime_type not in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -26,6 +29,7 @@ async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE
         rows_count = await load_data_to_db(bio)
         await update.message.reply_text(f'Loaded {rows_count} rows')
     except Exception as e:
+        logger.exception("Ошибка загрузки файла %s в БД", document.file_name)
         await update.message.reply_text(f'load_datafile err: {str(e)}')
 
 
@@ -191,4 +195,3 @@ async def get_all_users() -> List[UserModel]:
         result = await session.execute(stmt)
         users = result.scalars().all()
         return list(users)
-
