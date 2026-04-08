@@ -88,21 +88,7 @@ async def send_daily_streak_reminder(context):
 
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    user_id = update.effective_user.id
-
-    try:
-        chat_member = await context.bot.get_chat_member(
-            chat_id="-1003732977673",
-            user_id=user_id
-        )
-
-        subscribed_statuses = ['member', 'administrator', 'creator']
-
-        return chat_member.status in subscribed_statuses
-
-    except Exception:
-        logger.exception("Ошибка при проверке подписки в сервисе history")
-        return False
+    return True
 
 
 
@@ -131,16 +117,6 @@ async def notify_maintenance(application):
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     """Обработчик команды /start с проверкой подписки"""
 
-    is_subscribed = await check_subscription(update, context)
-
-    if not is_subscribed:
-        await update.message.reply_text(
-            "🚫 Для использования бота необходимо подписаться на наш канал!\n\n"
-            "🔔 После подписки нажмите кнопку 'Я подписался'",
-            reply_markup=InlineKeyboardMarkup(subscribe_keyboard)
-        )
-        return MAIN_MENU
-
     if "user" not in context.user_data:
         user = update.effective_user
         telegram_id = user.id
@@ -164,32 +140,6 @@ async def check_subscription_after_start(update: Update, context: ContextTypes.D
     query = update.callback_query
     await query.answer()
 
-
-    is_subscribed = await check_subscription(update, context)
-
-    if not is_subscribed:
-
-        reply_markup = InlineKeyboardMarkup(subscribe_keyboard)
-
-        try:
-            await query.edit_message_text(
-                "❌ Подписка не найдена!\n\n"
-                "Пожалуйста, подпишитесь на канал и нажмите кнопку снова.\n"
-                "🔄 Попробуйте ещё раз",
-                reply_markup=reply_markup
-            )
-        except Exception as e:
-            if "Message is not modified" in str(e):
-                await query.message.reply_text(
-                    "❌ Подписка всё ещё не найдена!\n\n"
-                    "Пожалуйста, подпишитесь на канал и нажмите кнопку снова.",
-                    reply_markup=reply_markup
-                )
-            else:
-                raise e
-
-        return MAIN_MENU
-
     if "user" not in context.user_data:
         user = update.effective_user
         telegram_id = user.id
@@ -208,16 +158,6 @@ async def check_subscription_after_start(update: Update, context: ContextTypes.D
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-
-    is_subscribed = await check_subscription(update, context)
-
-    if not is_subscribed:
-        await query.message.reply_text(
-            "🚫 Для использования бота необходимо подписаться на наш канал!\n\n"
-            "🔔 После подписки нажмите кнопку 'Я подписался'",
-            reply_markup=InlineKeyboardMarkup(subscribe_keyboard)
-        )
-        return MAIN_MENU
 
     if "user" not in context.user_data:
         user = update.effective_user

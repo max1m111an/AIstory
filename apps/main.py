@@ -84,7 +84,8 @@ def main():
                 CallbackQueryHandler(save_and_exit_marathon, pattern='^save_and_exit$'),
             ]
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler('cancel', cancel)],
+        per_message=True,
     )
 
     application.add_handler(conv_handler)
