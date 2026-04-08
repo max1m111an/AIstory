@@ -1,5 +1,6 @@
 import os
 import asyncio
+import logging
 from datetime import time
 from zoneinfo import ZoneInfo
 from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue, MessageHandler, filters
@@ -17,6 +18,20 @@ from handles.start_menu import check_subscription_after_start, notify_maintenanc
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+async def handle_bot_error(update, context):
+    logger.error(
+        "Unhandled telegram bot error. update=%s user_data_keys=%s",
+        update,
+        list(context.user_data.keys()) if context.user_data else [],
+        exc_info=context.error,
+    )
 
 
 def main():
@@ -69,11 +84,13 @@ def main():
                 CallbackQueryHandler(save_and_exit_marathon, pattern='^save_and_exit$'),
             ]
         },
-        fallbacks=[CommandHandler('cancel', cancel)]
+        fallbacks=[CommandHandler('cancel', cancel)],
+        per_message=True,
     )
 
     application.add_handler(conv_handler)
     application.add_handler(MessageHandler(filters.Document.ALL, load_datafile_to_db))
+    application.add_error_handler(handle_bot_error)
 
     application.run_polling()
 

@@ -1,6 +1,10 @@
 import random
 from typing import Dict, List
 import re
+import logging
+
+logger = logging.getLogger(__name__)
+MAX_GENERATION_ATTEMPTS = 30
 
 def extract_year_or_interval(date_str: str) -> tuple:
     date_str = date_str.strip()
@@ -81,7 +85,9 @@ async def generate_smart_answers(correct_question: Dict, all_questions: List[Dic
                     if len(wrong_answers) >= 2:
                         break
 
-        while len(wrong_answers) < 2:
+        attempts = 0
+        while len(wrong_answers) < 2 and attempts < MAX_GENERATION_ATTEMPTS:
+            attempts += 1
             if year_dates:
                 random_year = random.choice(year_dates)
             else:
@@ -89,6 +95,18 @@ async def generate_smart_answers(correct_question: Dict, all_questions: List[Dic
 
             if str(random_year) != correct_year and str(random_year) not in wrong_answers:
                 wrong_answers.append(str(random_year))
+        if len(wrong_answers) < 2:
+            logger.warning(
+                "Достигнут лимит генерации неправильных ответов (year). correct_date=%s wrong_answers=%s",
+                correct_date,
+                wrong_answers,
+            )
+            fallback_year = correct_year_num + 77
+            while len(wrong_answers) < 2:
+                candidate = str(fallback_year)
+                if candidate != correct_year and candidate not in wrong_answers:
+                    wrong_answers.append(candidate)
+                fallback_year += 17
 
     else:
         start_year, end_year = correct_parts
@@ -116,7 +134,9 @@ async def generate_smart_answers(correct_question: Dict, all_questions: List[Dic
         elif intervals:
             wrong_answers.extend(intervals)
 
-        while len(wrong_answers) < 2:
+        attempts = 0
+        while len(wrong_answers) < 2 and attempts < MAX_GENERATION_ATTEMPTS:
+            attempts += 1
             offset = random.randint(10, 50)
             new_start = start_num + offset
             new_end = end_num + offset
@@ -126,11 +146,35 @@ async def generate_smart_answers(correct_question: Dict, all_questions: List[Dic
 
             if new_interval != correct_date and new_interval not in wrong_answers:
                 wrong_answers.append(new_interval)
+        if len(wrong_answers) < 2:
+            logger.warning(
+                "Достигнут лимит генерации неправильных ответов (interval). correct_date=%s wrong_answers=%s",
+                correct_date,
+                wrong_answers,
+            )
+            separator = '.' if '.' in correct_date else '-'
+            offset = 60
+            while len(wrong_answers) < 2:
+                fallback_interval = f"{start_num + offset}{separator}{end_num + offset}"
+                if fallback_interval != correct_date and fallback_interval not in wrong_answers:
+                    wrong_answers.append(fallback_interval)
+                offset += 10
 
     if same_type_dates:
         random_wrong = random.choice(same_type_dates)
-        while random_wrong == correct_date or random_wrong in wrong_answers:
+        attempts = 0
+        while (random_wrong == correct_date or random_wrong in wrong_answers) and attempts < MAX_GENERATION_ATTEMPTS:
+            attempts += 1
             random_wrong = random.choice(same_type_dates)
+        if random_wrong == correct_date or random_wrong in wrong_answers:
+            logger.warning(
+                "Достигнут лимит выбора случайного неправильного ответа. correct_date=%s wrong_answers=%s",
+                correct_date,
+                wrong_answers,
+            )
+            random_wrong = next((d for d in same_type_dates if d != correct_date and d not in wrong_answers), None)
+            if not random_wrong:
+                random_wrong = f"{correct_parts[0]}_fallback"
         wrong_answers.append(random_wrong)
     else:
         if correct_type == 'year':
@@ -198,7 +242,9 @@ async def generate_smart_answers_event_date(correct_question: Dict, all_question
                     if len(wrong_answers) >= 2:
                         break
 
-        while len(wrong_answers) < 2:
+        attempts = 0
+        while len(wrong_answers) < 2 and attempts < MAX_GENERATION_ATTEMPTS:
+            attempts += 1
             if year_dates:
                 random_year = random.choice(year_dates)
             else:
@@ -206,6 +252,18 @@ async def generate_smart_answers_event_date(correct_question: Dict, all_question
 
             if str(random_year) != correct_year and str(random_year) not in wrong_answers:
                 wrong_answers.append(str(random_year))
+        if len(wrong_answers) < 2:
+            logger.warning(
+                "Достигнут лимит генерации неправильных ответов (year/event_date). correct_date=%s wrong_answers=%s",
+                correct_date,
+                wrong_answers,
+            )
+            fallback_year = correct_year_num + 77
+            while len(wrong_answers) < 2:
+                candidate = str(fallback_year)
+                if candidate != correct_year and candidate not in wrong_answers:
+                    wrong_answers.append(candidate)
+                fallback_year += 17
 
     else:
         start_year, end_year = correct_parts
@@ -233,7 +291,9 @@ async def generate_smart_answers_event_date(correct_question: Dict, all_question
         elif intervals:
             wrong_answers.extend(intervals)
 
-        while len(wrong_answers) < 2:
+        attempts = 0
+        while len(wrong_answers) < 2 and attempts < MAX_GENERATION_ATTEMPTS:
+            attempts += 1
             offset = random.randint(10, 50)
             new_start = start_num + offset
             new_end = end_num + offset
@@ -243,11 +303,35 @@ async def generate_smart_answers_event_date(correct_question: Dict, all_question
 
             if new_interval != correct_date and new_interval not in wrong_answers:
                 wrong_answers.append(new_interval)
+        if len(wrong_answers) < 2:
+            logger.warning(
+                "Достигнут лимит генерации неправильных ответов (interval/event_date). correct_date=%s wrong_answers=%s",
+                correct_date,
+                wrong_answers,
+            )
+            separator = '.' if '.' in correct_date else '-'
+            offset = 60
+            while len(wrong_answers) < 2:
+                fallback_interval = f"{start_num + offset}{separator}{end_num + offset}"
+                if fallback_interval != correct_date and fallback_interval not in wrong_answers:
+                    wrong_answers.append(fallback_interval)
+                offset += 10
 
     if same_type_dates:
         random_wrong = random.choice(same_type_dates)
-        while random_wrong == correct_date or random_wrong in wrong_answers:
+        attempts = 0
+        while (random_wrong == correct_date or random_wrong in wrong_answers) and attempts < MAX_GENERATION_ATTEMPTS:
+            attempts += 1
             random_wrong = random.choice(same_type_dates)
+        if random_wrong == correct_date or random_wrong in wrong_answers:
+            logger.warning(
+                "Достигнут лимит выбора случайного неправильного ответа (event_date). correct_date=%s wrong_answers=%s",
+                correct_date,
+                wrong_answers,
+            )
+            random_wrong = next((d for d in same_type_dates if d != correct_date and d not in wrong_answers), None)
+            if not random_wrong:
+                random_wrong = f"{correct_parts[0]}_fallback"
         wrong_answers.append(random_wrong)
     else:
         if correct_type == 'year':
