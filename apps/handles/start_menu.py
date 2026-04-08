@@ -6,6 +6,7 @@ from assets import getMainMenu, getTrainingOptionalMenu, main_menu_keybord
 from assets.Menu import back_menu_keyboard, get_choose_train, subscribe_keyboard, noth_keyboard
 from constants import MAIN_MENU, TRAINING
 from handles.db_handles import add_user, get_user_by_telegram_id, get_all_users
+from utils.message_cleanup import send_clean_message, send_clean_message_with_storage
 import asyncio
 import random
 import pytz
@@ -71,7 +72,8 @@ async def send_daily_streak_reminder(context):
                 last_activity,
             )
 
-            await bot.send_message(
+            await send_clean_message(
+                context=context,
                 chat_id=user.telegram_id,
                 text=text,
                 reply_markup=InlineKeyboardMarkup(noth_keyboard)
@@ -98,8 +100,10 @@ async def notify_maintenance(application):
 
     for user in users:
         try:
-            await application.bot.send_message(
-                chat_id=user.telegram_id,   # ✅ правильно
+            await send_clean_message_with_storage(
+                bot_data=application.bot_data,
+                bot=application.bot,
+                chat_id=user.telegram_id,
                 text=(
                     "⚙️ Бот был перезапущен после технического обслуживания.\n\n"
                     "Пожалуйста, нажмите /start чтобы продолжить работу."
