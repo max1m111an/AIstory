@@ -142,18 +142,20 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     query = update.callback_query
     await query.answer()
 
-    difficulty_id = context.user_data.get("difficulty")
     era_id = context.user_data.get("era_id")
+    era_name = await get_era_name_by_id(era_id)
+
+    difficulty_id = context.user_data.get("difficulty")
     difficulty_name = difficulty_id_to_name[difficulty_id] if difficulty_id else "Не выбрана"
 
-    era_name = await get_era_name_by_id(era_id)
+    train_type = context.user_data.get('train_type', 'training')
     
     if query.data in ('event_date', 'date_event'):
         context.user_data["test_type"] = get_test_type(query.data)
 
         has_difficulty = difficulty_id is not None
         has_era = era_id is not None
-        train_type = context.user_data.get('train_type', 'training')
+       
         has_saved_progress = context.user_data.get('has_marathon_progress', False) and train_type == 'marathon'
 
         date_event_keyboard = era_diff_keyboard.copy()
@@ -178,7 +180,7 @@ async def training_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 
     elif query.data == 'back_training':
         reply_markup = InlineKeyboardMarkup(get_choose_train(train_type == 'training'))
-        await query.edit_message_text(getTrainingOptionalMenu(context.user_data.get('train_type')), reply_markup=reply_markup)
+        await query.edit_message_text(getTrainingOptionalMenu(train_type), reply_markup=reply_markup)
         return TRAINING
     elif query.data == 'chronology':
         await start_chronology_mode(update, context)

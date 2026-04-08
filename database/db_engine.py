@@ -48,7 +48,7 @@ class Database:
         db_url = _build_db_url()
         self._engine = create_async_engine(
             db_url,
-            echo=False,
+            echo=True,
             pool_pre_ping=True,
         )
         self._sessionmaker = async_sessionmaker(
