@@ -15,7 +15,7 @@ sqlalchemy = "^2.0.44"
 greenlet = "^3.2.4"
 cryptography = "^46.0.3"
 dotenv = "^0.9.9"
-python-telegram-bot = "^22.5"
+python-telegram-bot = {extras = ["job-queue"], version = "^22.6"}
 aiomysql = "^0.3.2"
 pandas = "^2.3.3"
 aiofiles = "^25.1.0"

@@ -1,75 +1,95 @@
 import os
 import asyncio
-from io import BytesIO
+import logging
+from datetime import time
+from zoneinfo import ZoneInfo
+from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue, MessageHandler, filters
 
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandler, filters
+from handles.db_handles import load_datafile_to_db
+from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
+from handles import (
+    start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel,
+    era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions,
+    back_to_training_from_test, save_and_exit_marathon, handle_chronology, check_chronology, start_chronology_mode
+)
+from database import database
+from handles.start_menu import check_subscription_after_start, notify_maintenance, send_daily_streak_reminder
 
-from database import load_data_to_db
-from database.db_engine import database
-from database.models.user import UserModel
-
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 BOT_TOKEN = os.getenv('BOT_TOKEN')
+logging.basicConfig(
+    level=os.getenv("LOG_LEVEL", "INFO"),
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text('Привет! ')
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await update.message.reply_text('Доступные команды:\n/start - начать работу\n/help - помощь')
-
-
-async def test_db_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Команда для тестирования БД"""
-    try:
-        async with database.session() as session:
-            existing_user = await session.get(UserModel, 123456)
-            if existing_user:
-                await update.message.reply_text('✅ Пользователь уже существует в БД!')
-                return
-
-            test_user = UserModel(
-                username="test_user",
-                telegram_id=123456
-            )
-            session.add(test_user)
-            await session.commit()
-            await update.message.reply_text('✅ Тест БД выполнен! Пользователь создан.')
-    except Exception as e:
-        await update.message.reply_text(f'❌ Ошибка БД: {str(e)}')
-
-
-async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    document = update.message.document
-    print(document.file_name)
-    await update.message.reply_text(f"File: {document.file_name}, Size: {document.file_size}")
-
-    if document.mime_type not in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                              'application/vnd.ms-excel']:
-        await update.message.reply_text(f'Wrong file extension.')
-
-    file = await document.get_file()
-    bio = BytesIO()
-    await file.download_to_memory(bio)
-    try:
-        rows_count = await load_data_to_db(bio)
-        await update.message.reply_text(f'Loaded {rows_count} rows')
-    except Exception as e:
-        await update.message.reply_text(f'load_datafile err: {str(e)}')
+async def handle_bot_error(update, context):
+    logger.error(
+        "Unhandled telegram bot error. update=%s user_data_keys=%s",
+        update,
+        list(context.user_data.keys()) if context.user_data else [],
+        exc_info=context.error,
+    )
 
 
 def main():
     loop = asyncio.get_event_loop()
     loop.run_until_complete(database.init())
 
-    application = Application.builder().token(BOT_TOKEN).build()
+    application = Application.builder().token(BOT_TOKEN).job_queue(JobQueue()).build()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("testdb", test_db_command))
+    async def startup_tasks(app):
+        await notify_maintenance(app)
+
+        app.job_queue.run_daily(
+            send_daily_streak_reminder,
+            time=time(hour=12, minute=37, tzinfo=MOSCOW_TZ),
+            days=(0,1,2,3,4,5,6),  # каждый день недели
+            name="daily_streak",
+        )
+
+    application.post_init = startup_tasks
+
+    conv_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start)],
+        states={
+            MAIN_MENU: [
+                CallbackQueryHandler(main_menu, pattern='^(training|intensive|marathon|streak|stats|back_main)$'),
+                CallbackQueryHandler(check_subscription_after_start, pattern='^check_sub_after_start$'),
+            ],
+            TRAINING: [
+                CallbackQueryHandler(training_menu,
+                                     pattern='^(chronology|date_event|event_date|back_main|back_training|continue_marathon)$')
+            ],
+            SETTING_TEST: [
+                CallbackQueryHandler(era_diff_menu,
+                                     pattern='^(difficulty|era|date_event|event_date|back_training|start_test|continue_marathon)$'),
+                CallbackQueryHandler(settings_menu,
+                                     pattern='^(diff_-1|diff_1|diff_2|diff_3|era_-1|era_[0-9]+|event_date|date_event)$')
+            ],
+            START_TEST: [
+                CallbackQueryHandler(start_test_menu, pattern='^cancel_test$'),
+                CallbackQueryHandler(handle_answer, pattern='^answer_[1-4]$'),
+                CallbackQueryHandler(next_question, pattern='^next_question$'),
+                CallbackQueryHandler(main_menu, pattern='^back_main$'),
+                CallbackQueryHandler(era_diff_menu, pattern='^(difficulty|era)$'),
+                CallbackQueryHandler(start_test_with_all_questions, pattern='^start_test$'),
+                CallbackQueryHandler(back_to_training_from_test, pattern='^back_training$'),
+                CallbackQueryHandler(continue_intensive_mode, pattern='^continue_intensive$'),
+                CallbackQueryHandler(handle_chronology, pattern='^chronology_'),
+                CallbackQueryHandler(check_chronology, pattern='^check_chronology$'),
+                CallbackQueryHandler(start_chronology_mode, pattern='^chronology_retry$'),
+                CallbackQueryHandler(save_and_exit_marathon, pattern='^save_and_exit$'),
+            ]
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+
+    application.add_handler(conv_handler)
     application.add_handler(MessageHandler(filters.Document.ALL, load_datafile_to_db))
+    application.add_error_handler(handle_bot_error)
 
     application.run_polling()
 

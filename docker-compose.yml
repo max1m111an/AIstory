@@ -1,3 +1,5 @@
+version: "3.9"
+
 services:
   history:
     depends_on:
@@ -9,16 +11,21 @@ services:
       target: "history"
     env_file:
       - ".env"
+    environment:
+      BOT_RECYCLE_SECONDS: "${BOT_RECYCLE_SECONDS:-0}"
+      BOT_RESTART_DELAY_SECONDS: "${BOT_RESTART_DELAY_SECONDS:-5}"
     volumes:
       - "./apps/:/app/"
       - "./database/:/app/database/"
     networks:
-      local:
+      - local
 
   database:
     build:
       dockerfile: "Dockerfile"
       target: "database"
+      context: .
+    restart: unless-stopped
     environment:
       MARIADB_RANDOM_ROOT_PASSWORD: 1
       MARIADB_USER: "${DB_USER}"
@@ -28,6 +35,7 @@ services:
     expose:
       - 3306
     volumes:
+      - db_data:/var/lib/mysql
       - "./database/dumps/:/docker-entrypoint-initdb.d:ro"
     healthcheck:
       test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
@@ -36,20 +44,39 @@ services:
       timeout: 5s
       retries: 3
     networks:
-      local:
-  dbadmin:
+      - local
+
+  backup:
+    image: debian:bookworm-slim
+    restart: unless-stopped
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+    volumes:
+      - ./database/backups:/backup
     depends_on:
       database:
         condition: service_healthy
-    build:
-      dockerfile: "Dockerfile"
-      target: "dbadmin"
-    expose:
-      - 8080
-    ports:
-      - "${ADMINER_PORT}:8080"
+    command: >
+      bash -c "
+      apt-get update &&
+      apt-get install -y mariadb-client &&
+      echo 'Waiting for database with authentication...' &&
+      until mariadb-admin ping -h $$DB_HOST -u$$DB_USER -p$$DB_PASS --silent; do sleep 3; done &&
+      echo 'Database is up and authenticated!' &&
+      while true; do
+        mysqldump -h $$DB_HOST -u$$DB_USER -p$$DB_PASS $$DB_NAME | gzip > /backup/backup_$$(date +%Y%m%d_%H%M).sql.gz;
+        find /backup -type f -name '*.gz' -mtime +7 -delete;
+        sleep 21600;
+      done
+      "
     networks:
-      local:
+      - local
 
 networks:
   local:
+
+volumes:
+  db_data:

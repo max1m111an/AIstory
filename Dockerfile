@@ -8,6 +8,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 WORKDIR "/app"
 CMD ["python", "main.py"]
 
-FROM mariadb:latest as database
-
-FROM adminer as dbadmin
+FROM mariadb:latest AS database
