@@ -1,9 +1,10 @@
 import os
 import asyncio
 import logging
+from pathlib import Path
 from datetime import time
 from zoneinfo import ZoneInfo
-from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, ConversationHandler, CallbackQueryHandler, JobQueue, MessageHandler, PicklePersistence, filters
 
 from handles.db_handles import load_datafile_to_db
 from constants import SETTING_TEST, MAIN_MENU, TRAINING, START_TEST
@@ -11,7 +12,7 @@ from handles import (
     start, main_menu, training_menu, start_test_menu, handle_answer, next_question, cancel,
     era_diff_menu, settings_menu, continue_intensive_mode, start_test_with_all_questions,
     back_to_training_from_test, save_and_exit_marathon, handle_chronology, check_chronology, start_chronology_mode,
-    culture_dispatch
+    culture_dispatch, restore_menu_without_start
 )
 from database import database
 from handles.start_menu import check_subscription_after_start, notify_maintenance, send_daily_streak_reminder
@@ -39,7 +40,16 @@ def main():
     loop = asyncio.get_event_loop()
     loop.run_until_complete(database.init())
 
-    application = Application.builder().token(BOT_TOKEN).job_queue(JobQueue()).build()
+    persistence_path = Path(__file__).resolve().parent / "bot_session_state.pkl"
+    persistence = PicklePersistence(filepath=str(persistence_path))
+
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .job_queue(JobQueue())
+        .persistence(persistence)
+        .build()
+    )
 
     async def startup_tasks(app):
         await notify_maintenance(app)
@@ -54,7 +64,11 @@ def main():
     application.post_init = startup_tasks
 
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler('start', start)],
+        entry_points=[
+            CommandHandler('start', start),
+            CommandHandler('menu', restore_menu_without_start),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, restore_menu_without_start),
+        ],
         states={
             MAIN_MENU: [
                 CallbackQueryHandler(main_menu, pattern='^(training|intensive|marathon|culture|streak|stats|back_main)$'),
@@ -87,6 +101,9 @@ def main():
             ]
         },
         fallbacks=[CommandHandler('cancel', cancel)],
+        name="main_conversation",
+        persistent=True,
+        allow_reentry=True,
     )
 
     application.add_handler(conv_handler)
