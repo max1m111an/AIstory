@@ -88,8 +88,21 @@ async def send_daily_streak_reminder(context):
 
 
 async def check_subscription(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    return True
+    user_id = update.effective_user.id
 
+    try:
+        chat_member = await context.bot.get_chat_member(
+            chat_id="-1003732977673",
+            user_id=user_id,
+        )
+
+        subscribed_statuses = ['member', 'administrator', 'creator']
+
+        return chat_member.status in subscribed_statuses
+
+    except Exception as e:
+        print(f"Ошибка при проверке подписки: {e}")
+        return False
 
 
 async def notify_maintenance(application):
