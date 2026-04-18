@@ -7,7 +7,7 @@ from sqlalchemy import select, and_, update, text
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database import load_culture_to_db, database
+from database import load_culture_to_db, load_events_to_db, database
 from database.models import EventModel, EraModel, UserModel
 
 logger = logging.getLogger(__name__)
@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 
 async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     document = update.message.document
-    logger.info("Получен файл для загрузки: %s", document.file_name)
-    await update.message.reply_text(f"File: {document.file_name}, Size: {document.file_size}")
+    filename: str = str(document.file_name)
+    logger.info("Получен файл для загрузки: %s", filename)
+    await update.message.reply_text(f"File: {filename}, Size: {document.file_size}")
 
     if document.mime_type not in ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
                               'application/vnd.ms-excel']:
@@ -26,10 +27,10 @@ async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE
     bio = BytesIO()
     await file.download_to_memory(bio)
     try:
-        rows_count = await load_culture_to_db(bio)
+        rows_count = (await load_culture_to_db(bio) if filename.contains('culture') else await load_events_to_db(bio))
         await update.message.reply_text(f'Loaded {rows_count} rows')
     except Exception as e:
-        logger.exception("Ошибка загрузки файла %s в БД", document.file_name)
+        logger.exception("Ошибка загрузки файла %s в БД", filename)
         await update.message.reply_text(f'load_datafile err: {str(e)}')
 
 
