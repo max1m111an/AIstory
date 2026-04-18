@@ -2,7 +2,7 @@ from telegram import Update, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.error import Forbidden
 import logging
-from assets import getMainMenu, getTrainingOptionalMenu, main_menu_keybord
+from assets import getMainMenu, getTrainingOptionalMenu, main_menu_keybord, culture_choose_menu
 from assets.Menu import back_menu_keyboard, get_choose_train, subscribe_keyboard, noth_keyboard
 from constants import MAIN_MENU, TRAINING
 from handles.db_handles import add_user, get_user_by_telegram_id, get_all_users
@@ -173,6 +173,15 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup=reply_markup
         )
         context.user_data['train_type'] = query.data
+        return TRAINING
+
+    elif query.data == 'culture':
+        reply_markup = InlineKeyboardMarkup(culture_choose_menu)
+        await query.edit_message_text(
+            getTrainingOptionalMenu('culture'),
+            reply_markup=reply_markup
+        )
+        context.user_data['train_type'] = 'culture'
         return TRAINING
 
     elif query.data == 'back_main':

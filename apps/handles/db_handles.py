@@ -3,7 +3,7 @@ from io import BytesIO
 from typing import List, Dict
 import logging
 
-from sqlalchemy import select, and_, update
+from sqlalchemy import select, and_, update, text
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -195,3 +195,12 @@ async def get_all_users() -> List[UserModel]:
         result = await session.execute(stmt)
         users = result.scalars().all()
         return list(users)
+
+
+async def get_random_cultures(limit: int = 5) -> List[Dict]:
+    """Получает случайные элементы культуры из таблицы cultures."""
+    async with database.session() as session:
+        stmt = text("SELECT * FROM cultures ORDER BY RAND() LIMIT :limit")
+        result = await session.execute(stmt, {"limit": limit})
+        rows = result.mappings().all()
+        return [dict(row) for row in rows]
