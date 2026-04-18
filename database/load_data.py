@@ -67,7 +67,7 @@ async def load_culture_to_db(file_: BytesIO, sheet_='Лист1'):
             try:
                 culture_to_add = CultureModel(
                     img_name=row['image'],
-                    name=row['building'],
+                    build_name=row['building'],
                     date=row['year'],
                     author=row['architector'],
                     king=row['ruler'],

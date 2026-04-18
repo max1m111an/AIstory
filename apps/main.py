@@ -62,7 +62,7 @@ def main():
             ],
             TRAINING: [
                 CallbackQueryHandler(training_menu,
-                                     pattern='^(chronology|date_event|event_date|back_main|back_training|continue_marathon|culture_training|culture_intensive)$')
+                                     pattern='^(chronology|date_event|event_date|back_main|back_training|continue_marathon|culture_training|culture_intensive|culture_exit_main)$')
             ],
             SETTING_TEST: [
                 CallbackQueryHandler(era_diff_menu,

@@ -7,7 +7,7 @@ from sqlalchemy import select, and_, update, text
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from database import load_data_to_db, database
+from database import load_culture_to_db, database
 from database.models import EventModel, EraModel, UserModel
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,7 @@ async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE
     bio = BytesIO()
     await file.download_to_memory(bio)
     try:
-        rows_count = await load_data_to_db(bio)
+        rows_count = await load_culture_to_db(bio)
         await update.message.reply_text(f'Loaded {rows_count} rows')
     except Exception as e:
         logger.exception("Ошибка загрузки файла %s в БД", document.file_name)

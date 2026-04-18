@@ -21,19 +21,19 @@ CATEGORY_DEFS = [
 ]
 
 CATEGORY_LABELS = {key: label for key, label in CATEGORY_DEFS}
-PHOTO_DIR = Path("database/culture_photos")
+PHOTO_DIR = Path("assets/culture_photos")
 
 
 def _normalize_card(raw: dict[str, Any]) -> dict[str, str]:
     """Нормализует названия полей БД в единый формат."""
     return {
-        "title": str(raw.get("title") or raw.get("name") or raw.get("building_name") or "—"),
-        "architect": str(raw.get("architect") or raw.get("author") or "—"),
-        "foundation_year": str(raw.get("foundation_year") or raw.get("year") or raw.get("founded") or "—"),
-        "ruler": str(raw.get("ruler") or raw.get("built_under") or raw.get("monarch") or "—"),
-        "style": str(raw.get("style") or raw.get("architectural_style") or "—"),
-        "city": str(raw.get("city") or raw.get("location") or "—"),
-        "img_name": str(raw.get("img_name") or raw.get("image") or ""),
+        "title": str(raw.get("build_name")),
+        "architect": str(raw.get("author")),
+        "foundation_year": str(raw.get("date")),
+        "ruler": str(raw.get("king")),
+        "style": str(raw.get("style")),
+        "city": str(raw.get("city")),
+        "img_name": str(raw.get("img_name")),
     }
 
 
