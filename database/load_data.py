@@ -20,7 +20,7 @@ async def parse_culture_datafile(file, sheet_name: str) -> pd.DataFrame:
     return pd.read_excel(file, sheet_name=sheet_name, engine='openpyxl')
 
 
-async def load_events__to_db(file_: BytesIO, sheet_='Лист1'):
+async def load_events_to_db(file_: BytesIO, sheet_='Лист1'):
     result = await parse_events_datafile(file_, sheet_)
     count: int = 0
     current_eras = {}
@@ -67,7 +67,7 @@ async def load_culture_to_db(file_: BytesIO, sheet_='Лист1'):
             try:
                 culture_to_add = CultureModel(
                     img_name=row['image'],
-                    name=row['building'],
+                    build_name=row['building'],
                     date=row['year'],
                     author=row['architector'],
                     king=row['ruler'],
