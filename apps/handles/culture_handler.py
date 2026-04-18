@@ -8,7 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from assets import getMainMenu, main_menu_keybord
-from handles.db_handles import get_random_cultures
+from handles.db_handles import get_random_cultures, increment_field, update_streak
 from constants import MAIN_MENU, START_TEST
 
 CATEGORY_DEFS = [
@@ -221,6 +221,8 @@ async def _check_current_card(update: Update, context: ContextTypes.DEFAULT_TYPE
     else:
         session["incorrect_count"] += 1
 
+    await update_streak(telegram_id=update.effective_user.id)
+
     await _show_culture_card(update, context)
 
 async def _next_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -239,8 +241,13 @@ async def _next_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     session = _session(context)
+    telegram_id = update.effective_user.id
 
     errors_text = "\n".join([f"• {CATEGORY_LABELS[k]}: {v}" for k, v in session["errors_by_category"].items() if v > 0])
+
+    await increment_field(telegram_id, "culture_completed_cards", session["total_passed"])
+    await increment_field(telegram_id, "culture_true_cards", session["correct_count"])
+    await increment_field(telegram_id, "culture_completed_full", 1)
 
     text = (
         "📊 **Результаты тренировки**\n\n"
