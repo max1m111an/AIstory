@@ -52,25 +52,41 @@ def _session(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Any]:
 
 async def _build_answers_pool(current_card: dict[str, str], field: str, count: int = 5) -> list[str]:
     correct = current_card[field]
-    wrong_needed = max(count - 1, 0)
-
-    wrong_answers = await get_culture_answer_values(
+    options = await get_culture_answer_values(
         field_name=field,
-        limit=wrong_needed,
-        exclude_value=correct,
+        limit=count,
         culture_type=current_card.get("type") if field == "title" else None,
     )
 
-    if field == "title" and len(wrong_answers) < wrong_needed:
+    unique_options: list[str] = []
+    for option in options:
+        if option not in unique_options:
+            unique_options.append(option)
+
+    if correct not in unique_options:
+        if len(unique_options) >= count:
+            unique_options[-1] = correct
+        else:
+            unique_options.append(correct)
+
+    if field == "title" and len(unique_options) < count:
         additional = await get_culture_answer_values(
             field_name=field,
-            limit=wrong_needed - len(wrong_answers),
-            exclude_value=correct,
+            limit=count,
         )
-        wrong_answers.extend([item for item in additional if item not in wrong_answers])
+        for value in additional:
+            if value not in unique_options:
+                unique_options.append(value)
+            if len(unique_options) >= count:
+                break
 
-    options = wrong_answers[:wrong_needed]
-    options.append(correct)
+    if len(unique_options) < count:
+        unique_options.extend([correct] * (count - len(unique_options)))
+
+    options = unique_options[:count]
+    if correct not in options:
+        options[-1] = correct
+
     random.shuffle(options)
     return options
 
@@ -156,11 +172,18 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     is_checked = session["checked"]
 
     for key, label in categories:
+        selected = ans.get(key)
+        selected_value = selected.get("value") if isinstance(selected, dict) else None
+        selected_idx = selected.get("index") if isinstance(selected, dict) else None
+
         if is_checked:
             icon = "✅" if res.get(key) else "❌"
-            btn_text = f"{icon} {ans.get(key, '—')}"
-        elif key in ans:
-            btn_text = f"🟡 {ans[key]}"
+            if res.get(key):
+                btn_text = f"{icon} {label}: {selected_value or '—'}"
+            else:
+                btn_text = f"{icon} {label}: {selected_value or '—'} ({card.get(key, '—')})"
+        elif selected_idx is not None:
+            btn_text = f"🟡 {label}: №{selected_idx}"
         else:
             btn_text = label
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"culture_category_{key}")])
@@ -207,11 +230,15 @@ async def _show_category_question(update: Update, context: ContextTypes.DEFAULT_
     options = await _build_answers_pool(card, category)
     session["current_options"] = options
 
-    text = f"❓ Выберите верный вариант для категории:\n**{CATEGORY_LABELS[category]}**"
+    options_text = "\n".join([f"{i}. {opt}" for i, opt in enumerate(options, 1)])
+    text = (
+        f"❓ Выберите верный вариант для категории:\n**{CATEGORY_LABELS[category]}**\n\n"
+        f"{options_text}"
+    )
 
     keyboard = []
-    for i, opt in enumerate(options, 1):
-        keyboard.append([InlineKeyboardButton(f"{i}. {opt}", callback_data=f"culture_pick_{i}")])
+    for i, _ in enumerate(options, 1):
+        keyboard.append([InlineKeyboardButton(str(i), callback_data=f"culture_pick_{i}")])
 
     keyboard.append([InlineKeyboardButton("⬅️ Назад", callback_data="culture_open_categories")])
 
@@ -225,7 +252,10 @@ async def _select_category_answer(update: Update, context: ContextTypes.DEFAULT_
     session = _session(context)
     category = session["active_category"]
     if category and "current_options" in session:
-        session["answers"][category] = session["current_options"][idx - 1]
+        session["answers"][category] = {
+            "index": idx,
+            "value": session["current_options"][idx - 1],
+        }
     await _show_culture_card(update, context)
 
 async def _check_current_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -236,7 +266,9 @@ async def _check_current_card(update: Update, context: ContextTypes.DEFAULT_TYPE
     results = {}
     correct_all = True
     for key, _ in categories:
-        is_correct = session["answers"].get(key) == card.get(key)
+        selected = session["answers"].get(key)
+        selected_value = selected.get("value") if isinstance(selected, dict) else None
+        is_correct = selected_value == card.get(key)
         results[key] = is_correct
         if not is_correct:
             correct_all = False
