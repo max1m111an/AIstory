@@ -108,6 +108,9 @@ async def start_culture_mode(update: Update, context: ContextTypes.DEFAULT_TYPE,
             await query.edit_message_text("❌ В базе данных нет карточек архитектуры.")
             return MAIN_MENU
 
+        if mode == "intensive":
+            cards = cards[:5]
+
         context.user_data["culture_session"] = {
             "mode": mode,
             "cards": cards,
@@ -119,7 +122,8 @@ async def start_culture_mode(update: Update, context: ContextTypes.DEFAULT_TYPE,
             "answers": {},
             "results": None,
             "checked": False,
-            "active_category": None
+            "active_category": None,
+            "options_by_card": {},
         }
 
         await _show_culture_card(update, context, force_new_message=True)
@@ -246,7 +250,16 @@ async def _show_category_question(update: Update, context: ContextTypes.DEFAULT_
     session["active_category"] = category
 
     card = session["cards"][session["index"]]
-    options = await _build_answers_pool(card, category)
+    card_index = session["index"]
+
+    options_by_card = session.setdefault("options_by_card", {})
+    card_options = options_by_card.setdefault(card_index, {})
+
+    options = card_options.get(category)
+    if options is None:
+        options = await _build_answers_pool(card, category)
+        card_options[category] = options
+
     session["current_options"] = options
 
     options_text = "\n".join([f"{i}. {opt}" for i, opt in enumerate(options, 1)])
