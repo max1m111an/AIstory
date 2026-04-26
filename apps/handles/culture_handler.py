@@ -124,6 +124,8 @@ async def start_culture_mode(update: Update, context: ContextTypes.DEFAULT_TYPE,
             "checked": False,
             "active_category": None,
             "options_by_card": {},
+            "intensive_wrong_cards": [],
+            "intensive_round": 1,
         }
 
         await _show_culture_card(update, context, force_new_message=True)
@@ -313,6 +315,8 @@ async def _check_current_card(update: Update, context: ContextTypes.DEFAULT_TYPE
         session["correct_count"] += 1
     else:
         session["incorrect_count"] += 1
+        if session.get("mode") == "intensive":
+            session["intensive_wrong_cards"].append(card)
 
     await update_streak(telegram_id=update.effective_user.id)
 
@@ -323,6 +327,18 @@ async def _next_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session["index"] += 1
 
     if session["index"] >= len(session["cards"]):
+        if session.get("mode") == "intensive" and session.get("intensive_wrong_cards"):
+            session["cards"] = session["intensive_wrong_cards"]
+            session["intensive_wrong_cards"] = []
+            session["intensive_round"] = session.get("intensive_round", 1) + 1
+            session["index"] = 0
+            session["answers"] = {}
+            session["results"] = None
+            session["checked"] = False
+            session["active_category"] = None
+            session["options_by_card"] = {}
+            await _show_culture_card(update, context, force_new_message=True)
+            return
         await _show_culture_final(update, context)
         return
 
