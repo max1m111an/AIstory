@@ -174,19 +174,27 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     for key, label in categories:
         selected = ans.get(key)
         selected_value = selected.get("value") if isinstance(selected, dict) else None
-        selected_idx = selected.get("index") if isinstance(selected, dict) else None
 
         if is_checked:
             icon = "✅" if res.get(key) else "❌"
-            if res.get(key):
-                btn_text = f"{icon} {label}: {selected_value or '—'}"
-            else:
-                btn_text = f"{icon} {label}: {selected_value or '—'} ({card.get(key, '—')})"
-        elif selected_idx is not None:
-            btn_text = f"🟡 {label}: №{selected_idx}"
+            btn_text = f"{icon} {label}"
+        elif selected_value:
+            btn_text = f"🟡 {selected_value}"
         else:
             btn_text = label
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"culture_category_{key}")])
+
+    if is_checked:
+        answers_lines = []
+        for key, label in categories:
+            selected = ans.get(key)
+            selected_value = selected.get("value") if isinstance(selected, dict) else "—"
+            correct_value = card.get(key, "—")
+            if res.get(key):
+                answers_lines.append(f"• {label}: {selected_value}")
+            else:
+                answers_lines.append(f"• {label}: {selected_value} ({correct_value})")
+        caption += "\n\n**Ваши ответы:**\n" + "\n".join(answers_lines)
 
     nav_btns = []
     if len(ans) == len(categories) and not is_checked:
