@@ -125,6 +125,8 @@ async def culture_dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "culture_training":
         return await start_culture_mode(update, context, "training")
+    if data == "culture_intensive":
+        return await start_culture_mode(update, context, "intensive")
 
     if data == "culture_exit_main":
         context.user_data.pop("culture_session", None)
@@ -312,7 +314,12 @@ async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE
     session = _session(context)
     telegram_id = update.effective_user.id
 
-    errors_text = "\n".join([f"• {CATEGORY_LABELS[k]}: {v}" for k, v in session["errors_by_category"].items() if v > 0])
+    errors_lines = []
+    for key, _ in CATEGORY_DEFS:
+        errors_count = session["errors_by_category"].get(key, 0)
+        icon = "✅" if errors_count == 0 else "❌"
+        errors_lines.append(f"{icon} {CATEGORY_LABELS[key]}: {errors_count}")
+    errors_text = "\n".join(errors_lines)
 
     await increment_field(telegram_id, "culture_completed_cards", session["total_passed"])
     await increment_field(telegram_id, "culture_true_cards", session["correct_count"])
@@ -324,7 +331,7 @@ async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"❌ Ошибочно: {session['incorrect_count']}\n"
         f"📚 Всего карточек: {session['total_passed']}\n\n"
         "**Ошибки по категориям:**\n"
-        f"{errors_text if errors_text else 'Ошибок нет!'}"
+        f"{errors_text}"
     )
 
     try:
