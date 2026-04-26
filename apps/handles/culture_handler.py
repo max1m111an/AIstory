@@ -8,7 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from assets import getMainMenu, main_menu_keybord
-from handles.db_handles import get_random_cultures, increment_field, update_streak
+from handles.db_handles import get_culture_answer_values, get_random_cultures, increment_field, update_streak
 from constants import MAIN_MENU, START_TEST
 
 CATEGORY_DEFS = [
@@ -50,18 +50,26 @@ def _available_categories(card: dict[str, str]) -> list[tuple[str, str]]:
 def _session(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Any]:
     return context.user_data.setdefault("culture_session", {})
 
-def _build_answers_pool(cards: list[dict[str, str]], current_card: dict[str, str], field: str, count: int = 4) -> list[str]:
+async def _build_answers_pool(current_card: dict[str, str], field: str, count: int = 5) -> list[str]:
     correct = current_card[field]
-    if field == "title":
-        same_type_cards = [card for card in cards if card.get("type") == current_card.get("type")]
-        source_cards = same_type_cards or cards
-    else:
-        source_cards = cards
+    wrong_needed = max(count - 1, 0)
 
-    pool = {card[field] for card in source_cards if _is_value_present(card.get(field))}
-    pool.discard(correct)
+    wrong_answers = await get_culture_answer_values(
+        field_name=field,
+        limit=wrong_needed,
+        exclude_value=correct,
+        culture_type=current_card.get("type") if field == "title" else None,
+    )
 
-    options = random.sample(list(pool), min(count - 1, len(pool))) if pool else []
+    if field == "title" and len(wrong_answers) < wrong_needed:
+        additional = await get_culture_answer_values(
+            field_name=field,
+            limit=wrong_needed - len(wrong_answers),
+            exclude_value=correct,
+        )
+        wrong_answers.extend([item for item in additional if item not in wrong_answers])
+
+    options = wrong_answers[:wrong_needed]
     options.append(correct)
     random.shuffle(options)
     return options
@@ -196,7 +204,7 @@ async def _show_category_question(update: Update, context: ContextTypes.DEFAULT_
     session["active_category"] = category
 
     card = session["cards"][session["index"]]
-    options = _build_answers_pool(session["cards"], card, category)
+    options = await _build_answers_pool(card, category)
     session["current_options"] = options
 
     text = f"❓ Выберите верный вариант для категории:\n**{CATEGORY_LABELS[category]}**"

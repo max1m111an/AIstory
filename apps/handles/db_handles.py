@@ -205,3 +205,49 @@ async def get_random_cultures(limit: int = 5) -> List[Dict]:
         result = await session.execute(stmt, {"limit": limit})
         rows = result.mappings().all()
         return [dict(row) for row in rows]
+
+
+async def get_culture_answer_values(
+    field_name: str,
+    limit: int,
+    exclude_value: str | None = None,
+    culture_type: str | None = None,
+) -> List[str]:
+    field_map = {
+        "title": "build_name",
+        "architect": "author",
+        "foundation_year": "date",
+        "ruler": "king",
+        "style": "style",
+        "city": "city",
+    }
+
+    column_name = field_map.get(field_name)
+    if not column_name:
+        return []
+
+    query_parts = [
+        f"SELECT DISTINCT {column_name} AS value",
+        "FROM cultures",
+        f"WHERE {column_name} IS NOT NULL",
+        f"AND {column_name} NOT IN ('', '—', 'None')",
+    ]
+    params: dict[str, str | int] = {"limit": limit}
+
+    if exclude_value:
+        query_parts.append(f"AND {column_name} != :exclude_value")
+        params["exclude_value"] = exclude_value
+
+    if culture_type:
+        query_parts.append("AND type = :culture_type")
+        params["culture_type"] = culture_type
+
+    query_parts.append("ORDER BY RAND()")
+    query_parts.append("LIMIT :limit")
+
+    async with database.session() as session:
+        stmt = text("\n".join(query_parts))
+        result = await session.execute(stmt, params)
+        rows = result.scalars().all()
+
+    return [str(value) for value in rows]
