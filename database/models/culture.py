@@ -33,11 +33,11 @@ class CultureModel(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     img_name: Mapped[str] = mapped_column(String(25))
     build_name: Mapped[str] = mapped_column(String(50))
-    author: Mapped[str] = mapped_column(String(25))
-    date: Mapped[str] = mapped_column(String(25))
-    city: Mapped[str] = mapped_column(String(25))
-    king: Mapped[str] = mapped_column(String(25))
-    style: Mapped[str] = mapped_column(String(25))
+    author: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    date: Mapped[str] = mapped_column(String(50))
+    city: Mapped[str] = mapped_column(String(50))
+    king: Mapped[str] = mapped_column(String(50))
+    style: Mapped[str] = mapped_column(String(50))
     type: Mapped[CultureType] = mapped_column(
         SqlEnum(
             CultureType,

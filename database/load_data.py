@@ -76,10 +76,10 @@ async def load_culture_to_db(file_: BytesIO, sheet_='Лист1'):
         for _, row in result.iterrows():
             try:
                 culture_to_add = CultureModel(
-                    img_name=row['image'],
+                    img_name=row['photo'],
                     build_name=row['building'],
                     date=row['year'],
-                    author=row['architector'],
+                    author=row['creator'] if pd.notna(row['creator']) else None,
                     king=row['ruler'],
                     style=row['style'],
                     city=row['city'],

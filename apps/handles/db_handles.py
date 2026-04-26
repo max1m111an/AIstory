@@ -27,7 +27,7 @@ async def load_datafile_to_db(update: Update, context: ContextTypes.DEFAULT_TYPE
     bio = BytesIO()
     await file.download_to_memory(bio)
     try:
-        rows_count = (await load_culture_to_db(bio) if filename.contains('culture') else await load_events_to_db(bio))
+        rows_count = (await load_culture_to_db(bio) if filename.find('culture')!=(-1) else await load_events_to_db(bio))
         await update.message.reply_text(f'Loaded {rows_count} rows')
     except Exception as e:
         logger.exception("Ошибка загрузки файла %s в БД", filename)
