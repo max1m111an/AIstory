@@ -173,6 +173,11 @@ async def culture_dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return START_TEST
 
+train_type_en_to_ru = {
+    'intensive': 'интенсив',
+    'training': 'тренировка',
+}
+
 async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE, force_new_message: bool = False):
     query = update.callback_query
     session = _session(context)
@@ -180,8 +185,8 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     categories = _available_categories(card)
 
     caption = (
-        f"🏛 **Архитектура: {session['mode'].capitalize()}**\n"
-        f"Карточка №{session['total_passed'] + 1}\n\n"
+        f"🏛 **Архитектура: {train_type_en_to_ru[session['mode']].capitalize()}**\n"
+        f"Карточка №{session['index'] + 1} из {len(session['cards'])}\n\n"
         "Заполните все данные о строении на фото:"
     )
 
@@ -224,8 +229,8 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
 
     if nav_btns: keyboard.append(nav_btns)
 
-    keyboard.append([InlineKeyboardButton("🏁 Завершить тренировку", callback_data="culture_finish")])
-    keyboard.append([InlineKeyboardButton("📊 В меню", callback_data="culture_exit_main")])
+    keyboard.append([InlineKeyboardButton(f"🏁 Завершить {train_type_en_to_ru[session['mode']]}", callback_data="culture_finish")])
+    keyboard.append([InlineKeyboardButton("📊 Главное меню", callback_data="culture_exit_main")])
 
     image_path = PHOTO_DIR / card["img_name"]
 
@@ -347,8 +352,7 @@ async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE
     errors_lines = []
     for key, _ in CATEGORY_DEFS:
         errors_count = session["errors_by_category"].get(key, 0)
-        icon = "✅" if errors_count == 0 else "❌"
-        errors_lines.append(f"{icon} {CATEGORY_LABELS[key]}: {errors_count}")
+        errors_lines.append(f"{CATEGORY_LABELS[key]}: {errors_count}")
     errors_text = "\n".join(errors_lines)
 
     text = (
@@ -372,12 +376,15 @@ async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE
         pass
 
     if has_pending_intensive:
-        keyboard = [[InlineKeyboardButton("➡️ Продолжить интенсив", callback_data="culture_continue_intensive")]]
+        keyboard = [
+            [InlineKeyboardButton("➡️ Продолжить интенсив", callback_data="culture_continue_intensive")],
+            [InlineKeyboardButton("📊 Главное меню", callback_data="culture_exit_main")],
+        ]
     else:
         await increment_field(telegram_id, "culture_completed_cards", session["total_passed"])
         await increment_field(telegram_id, "culture_true_cards", session["correct_count"])
         await increment_field(telegram_id, "culture_completed_full", 1)
-        keyboard = [[InlineKeyboardButton("📊 В меню", callback_data="back_main")]]
+        keyboard = [[InlineKeyboardButton("📊 Главное меню", callback_data="back_main")]]
 
     await context.bot.send_message(
         update.effective_chat.id,
