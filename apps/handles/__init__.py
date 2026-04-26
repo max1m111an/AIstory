@@ -25,7 +25,8 @@ from .db_handles import (
 )
 from .start_menu import (
     start,
-    main_menu
+    main_menu,
+    restore_menu_without_start,
 )
 from .culture_handler import (
     culture_dispatch,
@@ -34,6 +35,7 @@ from .culture_handler import (
 __all__ = [
     "start",
     "main_menu",
+    "restore_menu_without_start",
     "training_menu",
     "start_test_menu",
     "handle_answer",

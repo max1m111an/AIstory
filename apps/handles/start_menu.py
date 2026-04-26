@@ -115,7 +115,7 @@ async def notify_maintenance(application):
                 chat_id=user.telegram_id,   # ✅ правильно
                 text=(
                     "⚙️ Бот был перезапущен после технического обслуживания.\n\n"
-                    "Пожалуйста, нажмите /start чтобы продолжить работу."
+                    "Можно просто написать любое сообщение или нажать /menu, чтобы продолжить работу."
                 )
             )
 
@@ -138,6 +138,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     reply_markup = InlineKeyboardMarkup(main_menu_keybord)
     await update.message.reply_text(getMainMenu(), reply_markup=reply_markup)
+    return MAIN_MENU
+
+
+async def restore_menu_without_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    """Позволяет пользователю вернуться в меню без обязательной команды /start."""
+    if "user" not in context.user_data:
+        user = update.effective_user
+        telegram_id = user.id
+        db_user = await add_user(telegram_id)
+        context.user_data["user"] = db_user
+
+    await update.message.reply_text(
+        "♻️ Восстанавливаю сессию. Открываю главное меню.",
+        reply_markup=InlineKeyboardMarkup(main_menu_keybord),
+    )
     return MAIN_MENU
 
 
