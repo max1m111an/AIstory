@@ -5,7 +5,7 @@ from sqlalchemy import select
 from database.models import EraModel
 from .db_engine import database
 from .models.event import EventModel
-from .models.culture import CultureModel
+from .models.culture import CultureModel, CultureType
 
 
 async def parse_events_datafile(file, sheet_name: str) -> pd.DataFrame:
@@ -17,7 +17,17 @@ async def parse_events_datafile(file, sheet_name: str) -> pd.DataFrame:
 
 
 async def parse_culture_datafile(file, sheet_name: str) -> pd.DataFrame:
-    return pd.read_excel(file, sheet_name=sheet_name, engine='openpyxl')
+    df = pd.read_excel(file, sheet_name=sheet_name, engine='openpyxl')
+
+    def capitalize_first(value):
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        if not normalized:
+            return normalized
+        return normalized[0].upper() + normalized[1:]
+
+    return df.applymap(capitalize_first)
 
 
 async def load_events_to_db(file_: BytesIO, sheet_='Лист1'):
@@ -73,6 +83,7 @@ async def load_culture_to_db(file_: BytesIO, sheet_='Лист1'):
                     king=row['ruler'],
                     style=row['style'],
                     city=row['city'],
+                    type=CultureType(row['type'].strip().lower()),
                 )
                 session.add(culture_to_add)
                 await session.commit()

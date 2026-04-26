@@ -31,15 +31,34 @@ def _normalize_card(raw: dict[str, Any]) -> dict[str, str]:
         "ruler": str(raw.get("king")),
         "style": str(raw.get("style")),
         "city": str(raw.get("city")),
+        "type": str(raw.get("type")),
         "img_name": str(raw.get("img_name")),
     }
+
+
+def _is_value_present(value: str | None) -> bool:
+    return bool(value and value not in ("—", "None", ""))
+
+
+def _available_categories(card: dict[str, str]) -> list[tuple[str, str]]:
+    return [
+        (key, label)
+        for key, label in CATEGORY_DEFS
+        if not (key == "architect" and not _is_value_present(card.get("architect")))
+    ]
 
 def _session(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Any]:
     return context.user_data.setdefault("culture_session", {})
 
 def _build_answers_pool(cards: list[dict[str, str]], current_card: dict[str, str], field: str, count: int = 4) -> list[str]:
     correct = current_card[field]
-    pool = {card[field] for card in cards if card[field] and card[field] not in ("—", "None", "")}
+    if field == "title":
+        same_type_cards = [card for card in cards if card.get("type") == current_card.get("type")]
+        source_cards = same_type_cards or cards
+    else:
+        source_cards = cards
+
+    pool = {card[field] for card in source_cards if _is_value_present(card.get(field))}
     pool.discard(correct)
 
     options = random.sample(list(pool), min(count - 1, len(pool))) if pool else []
@@ -55,7 +74,7 @@ async def start_culture_mode(update: Update, context: ContextTypes.DEFAULT_TYPE,
     cards = [_normalize_card(card) for card in raw_cards]
 
     if not cards:
-        await query.edit_message_text("❌ В базе данных нет карточек культуры.")
+        await query.edit_message_text("❌ В базе данных нет карточек архитектуры.")
         return MAIN_MENU
 
     context.user_data["culture_session"] = {
@@ -115,9 +134,10 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     query = update.callback_query
     session = _session(context)
     card = session["cards"][session["index"]]
+    categories = _available_categories(card)
 
     caption = (
-        f"🏛 **Культура: {session['mode'].capitalize()}**\n"
+        f"🏛 **Архитектура: {session['mode'].capitalize()}**\n"
         f"Карточка №{session['total_passed'] + 1}\n\n"
         "Заполните все данные о строении на фото:"
     )
@@ -127,7 +147,7 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     res = session["results"]
     is_checked = session["checked"]
 
-    for key, label in CATEGORY_DEFS:
+    for key, label in categories:
         if is_checked:
             icon = "✅" if res.get(key) else "❌"
             btn_text = f"{icon} {ans.get(key, '—')}"
@@ -138,7 +158,7 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"culture_category_{key}")])
 
     nav_btns = []
-    if len(ans) == len(CATEGORY_DEFS) and not is_checked:
+    if len(ans) == len(categories) and not is_checked:
         nav_btns.append(InlineKeyboardButton("🔍 Проверить", callback_data="culture_check"))
 
     if is_checked:
@@ -203,10 +223,11 @@ async def _select_category_answer(update: Update, context: ContextTypes.DEFAULT_
 async def _check_current_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = _session(context)
     card = session["cards"][session["index"]]
+    categories = _available_categories(card)
 
     results = {}
     correct_all = True
-    for key, _ in CATEGORY_DEFS:
+    for key, _ in categories:
         is_correct = session["answers"].get(key) == card.get(key)
         results[key] = is_correct
         if not is_correct:

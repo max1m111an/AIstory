@@ -1,7 +1,21 @@
-from sqlalchemy import UniqueConstraint, String
+from enum import Enum
+
+from sqlalchemy import Enum as SqlEnum, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from database import Base
+
+
+class CultureType(str, Enum):
+    ADMINISTRATIVE = "административное"
+    TOWER = "башня"
+    SKYSCRAPER = "высотка"
+    PALACE = "дворец"
+    HOUSE = "дом"
+    MEMORIAL = "мемориал"
+    MONUMENT = "монумент"
+    SCULPTURE = "скульптура"
+    TEMPLE = "храм"
 
 class CultureModel(Base):
     uid = (
@@ -24,3 +38,10 @@ class CultureModel(Base):
     city: Mapped[str] = mapped_column(String(25))
     king: Mapped[str] = mapped_column(String(25))
     style: Mapped[str] = mapped_column(String(25))
+    type: Mapped[CultureType] = mapped_column(
+        SqlEnum(
+            CultureType,
+            values_callable=lambda enum_cls: [item.value for item in enum_cls],
+            name="culture_type",
+        )
+    )
