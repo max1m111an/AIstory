@@ -8,7 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from assets import getMainMenu, main_menu_keybord
-from handles.db_handles import get_random_cultures, increment_field, update_streak
+from handles.db_handles import get_culture_answer_values, get_random_cultures, increment_field, update_streak
 from constants import MAIN_MENU, START_TEST
 
 CATEGORY_DEFS = [
@@ -31,18 +31,45 @@ def _normalize_card(raw: dict[str, Any]) -> dict[str, str]:
         "ruler": str(raw.get("king")),
         "style": str(raw.get("style")),
         "city": str(raw.get("city")),
+        "type": str(raw.get("type")),
         "img_name": str(raw.get("img_name")),
     }
+
+
+def _is_value_present(value: str | None) -> bool:
+    return bool(value and value not in ("—", "None", ""))
+
+
+def _available_categories(card: dict[str, str]) -> list[tuple[str, str]]:
+    return [
+        (key, label)
+        for key, label in CATEGORY_DEFS
+        if not (key == "architect" and not _is_value_present(card.get("architect")))
+    ]
 
 def _session(context: ContextTypes.DEFAULT_TYPE) -> dict[str, Any]:
     return context.user_data.setdefault("culture_session", {})
 
-def _build_answers_pool(cards: list[dict[str, str]], current_card: dict[str, str], field: str, count: int = 4) -> list[str]:
+async def _build_answers_pool(current_card: dict[str, str], field: str, count: int = 5) -> list[str]:
     correct = current_card[field]
-    pool = {card[field] for card in cards if card[field] and card[field] not in ("—", "None", "")}
-    pool.discard(correct)
+    wrong_needed = max(count - 1, 0)
 
-    options = random.sample(list(pool), min(count - 1, len(pool))) if pool else []
+    wrong_answers = await get_culture_answer_values(
+        field_name=field,
+        limit=wrong_needed,
+        exclude_value=correct,
+        culture_type=current_card.get("type") if field == "title" else None,
+    )
+
+    if field == "title" and len(wrong_answers) < wrong_needed:
+        additional = await get_culture_answer_values(
+            field_name=field,
+            limit=wrong_needed - len(wrong_answers),
+            exclude_value=correct,
+        )
+        wrong_answers.extend([item for item in additional if item not in wrong_answers])
+
+    options = wrong_answers[:wrong_needed]
     options.append(correct)
     random.shuffle(options)
     return options
@@ -55,7 +82,7 @@ async def start_culture_mode(update: Update, context: ContextTypes.DEFAULT_TYPE,
     cards = [_normalize_card(card) for card in raw_cards]
 
     if not cards:
-        await query.edit_message_text("❌ В базе данных нет карточек культуры.")
+        await query.edit_message_text("❌ В базе данных нет карточек архитектуры.")
         return MAIN_MENU
 
     context.user_data["culture_session"] = {
@@ -115,9 +142,10 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     query = update.callback_query
     session = _session(context)
     card = session["cards"][session["index"]]
+    categories = _available_categories(card)
 
     caption = (
-        f"🏛 **Культура: {session['mode'].capitalize()}**\n"
+        f"🏛 **Архитектура: {session['mode'].capitalize()}**\n"
         f"Карточка №{session['total_passed'] + 1}\n\n"
         "Заполните все данные о строении на фото:"
     )
@@ -127,7 +155,7 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
     res = session["results"]
     is_checked = session["checked"]
 
-    for key, label in CATEGORY_DEFS:
+    for key, label in categories:
         if is_checked:
             icon = "✅" if res.get(key) else "❌"
             btn_text = f"{icon} {ans.get(key, '—')}"
@@ -138,7 +166,7 @@ async def _show_culture_card(update: Update, context: ContextTypes.DEFAULT_TYPE,
         keyboard.append([InlineKeyboardButton(btn_text, callback_data=f"culture_category_{key}")])
 
     nav_btns = []
-    if len(ans) == len(CATEGORY_DEFS) and not is_checked:
+    if len(ans) == len(categories) and not is_checked:
         nav_btns.append(InlineKeyboardButton("🔍 Проверить", callback_data="culture_check"))
 
     if is_checked:
@@ -176,7 +204,7 @@ async def _show_category_question(update: Update, context: ContextTypes.DEFAULT_
     session["active_category"] = category
 
     card = session["cards"][session["index"]]
-    options = _build_answers_pool(session["cards"], card, category)
+    options = await _build_answers_pool(card, category)
     session["current_options"] = options
 
     text = f"❓ Выберите верный вариант для категории:\n**{CATEGORY_LABELS[category]}**"
@@ -203,10 +231,11 @@ async def _select_category_answer(update: Update, context: ContextTypes.DEFAULT_
 async def _check_current_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session = _session(context)
     card = session["cards"][session["index"]]
+    categories = _available_categories(card)
 
     results = {}
     correct_all = True
-    for key, _ in CATEGORY_DEFS:
+    for key, _ in categories:
         is_correct = session["answers"].get(key) == card.get(key)
         results[key] = is_correct
         if not is_correct:
