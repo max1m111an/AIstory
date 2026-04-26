@@ -8,7 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 from assets import getMainMenu, main_menu_keybord
-from handles.db_handles import get_culture_answer_values, get_random_cultures, increment_field, update_streak
+from handles.db_handles import get_all_cultures, get_culture_answer_values, increment_field, update_streak
 from constants import MAIN_MENU, START_TEST
 
 CATEGORY_DEFS = [
@@ -92,31 +92,40 @@ async def _build_answers_pool(current_card: dict[str, str], field: str, count: i
 
 async def start_culture_mode(update: Update, context: ContextTypes.DEFAULT_TYPE, mode: str):
     query = update.callback_query
+
+    if context.user_data.get("culture_starting"):
+        await query.answer("⏳ Тренировка уже запускается")
+        return START_TEST
+
+    context.user_data["culture_starting"] = True
     await query.answer()
 
-    raw_cards = await get_random_cultures(15)
+    raw_cards = await get_all_cultures()
     cards = [_normalize_card(card) for card in raw_cards]
 
-    if not cards:
-        await query.edit_message_text("❌ В базе данных нет карточек архитектуры.")
-        return MAIN_MENU
+    try:
+        if not cards:
+            await query.edit_message_text("❌ В базе данных нет карточек архитектуры.")
+            return MAIN_MENU
 
-    context.user_data["culture_session"] = {
-        "mode": mode,
-        "cards": cards,
-        "index": 0,
-        "total_passed": 0,
-        "correct_count": 0,
-        "incorrect_count": 0,
-        "errors_by_category": {key: 0 for key, _ in CATEGORY_DEFS},
-        "answers": {},
-        "results": None,
-        "checked": False,
-        "active_category": None
-    }
+        context.user_data["culture_session"] = {
+            "mode": mode,
+            "cards": cards,
+            "index": 0,
+            "total_passed": 0,
+            "correct_count": 0,
+            "incorrect_count": 0,
+            "errors_by_category": {key: 0 for key, _ in CATEGORY_DEFS},
+            "answers": {},
+            "results": None,
+            "checked": False,
+            "active_category": None
+        }
 
-    await _show_culture_card(update, context, force_new_message=True)
-    return START_TEST
+        await _show_culture_card(update, context, force_new_message=True)
+        return START_TEST
+    finally:
+        context.user_data["culture_starting"] = False
 
 async def culture_dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -301,8 +310,8 @@ async def _next_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session["index"] += 1
 
     if session["index"] >= len(session["cards"]):
-        new_cards = await get_random_cultures(10)
-        session["cards"].extend([_normalize_card(c) for c in new_cards])
+        await _show_culture_final(update, context)
+        return
 
     session["answers"] = {}
     session["results"] = None
