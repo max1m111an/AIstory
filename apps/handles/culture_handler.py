@@ -168,6 +168,8 @@ async def culture_dispatch(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await _next_card(update, context)
     elif data == "culture_finish":
         await _show_culture_final(update, context)
+    elif data == "culture_continue_intensive":
+        await _continue_culture_intensive(update, context)
 
     return START_TEST
 
@@ -327,18 +329,6 @@ async def _next_card(update: Update, context: ContextTypes.DEFAULT_TYPE):
     session["index"] += 1
 
     if session["index"] >= len(session["cards"]):
-        if session.get("mode") == "intensive" and session.get("intensive_wrong_cards"):
-            session["cards"] = session["intensive_wrong_cards"]
-            session["intensive_wrong_cards"] = []
-            session["intensive_round"] = session.get("intensive_round", 1) + 1
-            session["index"] = 0
-            session["answers"] = {}
-            session["results"] = None
-            session["checked"] = False
-            session["active_category"] = None
-            session["options_by_card"] = {}
-            await _show_culture_card(update, context, force_new_message=True)
-            return
         await _show_culture_final(update, context)
         return
 
@@ -352,16 +342,14 @@ async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE
     session = _session(context)
     telegram_id = update.effective_user.id
 
+    has_pending_intensive = session.get("mode") == "intensive" and bool(session.get("intensive_wrong_cards"))
+
     errors_lines = []
     for key, _ in CATEGORY_DEFS:
         errors_count = session["errors_by_category"].get(key, 0)
         icon = "✅" if errors_count == 0 else "❌"
         errors_lines.append(f"{icon} {CATEGORY_LABELS[key]}: {errors_count}")
     errors_text = "\n".join(errors_lines)
-
-    await increment_field(telegram_id, "culture_completed_cards", session["total_passed"])
-    await increment_field(telegram_id, "culture_true_cards", session["correct_count"])
-    await increment_field(telegram_id, "culture_completed_full", 1)
 
     text = (
         "📊 **Результаты тренировки**\n\n"
@@ -372,15 +360,48 @@ async def _show_culture_final(update: Update, context: ContextTypes.DEFAULT_TYPE
         f"{errors_text}"
     )
 
+    if has_pending_intensive:
+        text += (
+            f"\n\n⚡️ В интенсиве осталось карточек на повтор: {len(session['intensive_wrong_cards'])}\n"
+            "Нажмите «Продолжить интенсив», чтобы пройти неверные карточки ещё раз."
+        )
+
     try:
         await query.message.delete()
     except:
         pass
 
+    if has_pending_intensive:
+        keyboard = [[InlineKeyboardButton("➡️ Продолжить интенсив", callback_data="culture_continue_intensive")]]
+    else:
+        await increment_field(telegram_id, "culture_completed_cards", session["total_passed"])
+        await increment_field(telegram_id, "culture_true_cards", session["correct_count"])
+        await increment_field(telegram_id, "culture_completed_full", 1)
+        keyboard = [[InlineKeyboardButton("📊 В меню", callback_data="back_main")]]
+
     await context.bot.send_message(
         update.effective_chat.id,
         text=text,
-        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📊 В меню", callback_data="back_main")]]),
+        reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="Markdown"
     )
-    context.user_data.pop("culture_session", None)
+    if not has_pending_intensive:
+        context.user_data.pop("culture_session", None)
+
+
+async def _continue_culture_intensive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    session = _session(context)
+    if session.get("mode") != "intensive" or not session.get("intensive_wrong_cards"):
+        await _show_culture_final(update, context)
+        return
+
+    session["cards"] = session["intensive_wrong_cards"]
+    session["intensive_wrong_cards"] = []
+    session["intensive_round"] = session.get("intensive_round", 1) + 1
+    session["index"] = 0
+    session["answers"] = {}
+    session["results"] = None
+    session["checked"] = False
+    session["active_category"] = None
+    session["options_by_card"] = {}
+    await _show_culture_card(update, context, force_new_message=True)
